@@ -1,0 +1,13 @@
+# raw instrument exports (large, not needed to reproduce plots from cleaned data)
+raw/
+
+# rendered plot outputs (regenerate from the scripts + cleaned data)
+*.pdf
+*.png
+
+# python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
