@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from plotstyle import colors, figsize_double
+from plotstyle import colors, figsize_double, figsize_single
 
 BASE = Path(__file__).parent
 
@@ -233,7 +233,7 @@ def main():
     print(f"\nsaved {out_path} and {out_path.with_suffix('.png')}")
 
     # --- relaxation shape comparison, fast rate ---
-    fig2, ax_curves_fast = plt.subplots(figsize=figsize_double)
+    fig2, ax_curves_fast = plt.subplots(figsize=figsize_single)
     for material, cfg in MATERIALS.items():
         color = colors[material_order.index(material) + 3]
         fast_ids = cfg["rate_groups"]["fast"]

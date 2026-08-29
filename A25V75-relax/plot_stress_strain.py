@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from plotstyle import colors, figsize_double  # noqa: E402
+from plotstyle import colors, figsize_single  # noqa: E402
 
 CLEANED_DIR = Path(__file__).parent / "cleaned"
 
@@ -69,7 +69,7 @@ def ramp_bounds(position):
 def ramp_strain_stress(df):
     onset, ramp_end = ramp_bounds(df["position_mm"])
     sl = slice(onset, ramp_end + 1)
-    return df["strain"].to_numpy()[sl], df["stress"].to_numpy()[sl]
+    return 100 * df["strain"].to_numpy()[sl], df["stress"].to_numpy()[sl]
 
 
 def mean_stress_vs_strain(ramp_curves):
@@ -80,7 +80,7 @@ def mean_stress_vs_strain(ramp_curves):
 
 
 def main():
-    fig, ax = plt.subplots(figsize=figsize_double)
+    fig, ax = plt.subplots(figsize=figsize_single)
 
     ramp_by_test = {test_id: ramp_strain_stress(load(test_id)) for test_id in TESTS}
 
@@ -96,8 +96,8 @@ def main():
         strain, stress = mean_stress_vs_strain(ramp_curves)
         ax.plot(strain, stress, color=color, linewidth=1.8, label=label)
 
-    ax.set_xlabel("Strain (in/in)")
-    ax.set_ylabel("Stress (MPa)")
+    ax.set_xlabel("Engineering strain (\\%)")
+    ax.set_ylabel("Engineering stress (MPa)")
     ax.grid(True, alpha=0.4)
     ax.legend(fontsize=8)
 

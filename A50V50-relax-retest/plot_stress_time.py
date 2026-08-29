@@ -108,7 +108,7 @@ def main():
         ax.grid(True, alpha=0.4)
         ax.legend(fontsize=7)
 
-    axes[0].set_ylabel("Stress (MPa)")
+    axes[0].set_ylabel("Engineering stress (MPa)")
 
     fig.tight_layout()
 
