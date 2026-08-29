@@ -1,7 +1,7 @@
-"""Stress-vs-strain plot for the A25V75 relaxation tests, one subplot per
-loading rate, restricted to the loading ramp (the hold/relaxation phase
-that follows is excluded, since strain there is dominated by viscoelastic
-drift rather than the imposed deformation).
+"""Stress-vs-strain plot for the A25V75 relaxation tests, all loading rates
+overlaid on a single axis, restricted to the loading ramp (the
+hold/relaxation phase that follows is excluded, since strain there is
+dominated by viscoelastic drift rather than the imposed deformation).
 
 See plot_stress_time.py for the rate-group/replicate structure.
 """
@@ -80,13 +80,11 @@ def mean_stress_vs_strain(ramp_curves):
 
 
 def main():
-    fig, axes = plt.subplots(
-        1, 3, figsize=(figsize_double[0] * 1.6, figsize_double[1]), sharey=True
-    )
+    fig, ax = plt.subplots(figsize=figsize_double)
 
     ramp_by_test = {test_id: ramp_strain_stress(load(test_id)) for test_id in TESTS}
 
-    for ax, label in zip(axes, RATE_LABELS):
+    for label in RATE_LABELS:
         color = RATE_COLOR[label]
         for test_id, lbl in TESTS.items():
             if lbl != label:
@@ -96,14 +94,12 @@ def main():
 
         ramp_curves = [ramp_by_test[t] for t, lbl in TESTS.items() if lbl == label]
         strain, stress = mean_stress_vs_strain(ramp_curves)
-        ax.plot(strain, stress, color=color, linewidth=1.8, label="mean")
+        ax.plot(strain, stress, color=color, linewidth=1.8, label=label)
 
-        ax.set_xlabel("Strain (in/in)")
-        ax.set_title(label, fontsize=9)
-        ax.grid(True, alpha=0.4)
-        ax.legend(fontsize=7)
-
-    axes[0].set_ylabel("Stress (MPa)")
+    ax.set_xlabel("Strain (in/in)")
+    ax.set_ylabel("Stress (MPa)")
+    ax.grid(True, alpha=0.4)
+    ax.legend(fontsize=8)
 
     fig.tight_layout()
 
