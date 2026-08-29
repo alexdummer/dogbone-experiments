@@ -1,9 +1,23 @@
-"""Stress-vs-time, stress-vs-strain, stress-vs-position, and position-vs-strain
-plots for the A50V50 configuration retest: 3 specimens at 1 mm/low rate,
-3 at 2 mm/low rate, and 3 at 2 mm/high rate (10x). The original 6 mm/low
-rate specimens (Config 3, tests 5-6) and the original altered-rate
-specimens (test 7, 10x rate; test 8, 5x rate; both 6 mm) from the first
-A50V50-relax study are included for comparison.
+"""Stress-vs-time plot for the A50V50 relaxation tests, one subplot per
+loading rate, restricted to the 2 mm-hold retest series: tests 13-15 ramp
+at ~10x slower than baseline (~0.017 mm/s), tests 4-6 ramp at the baseline
+rate (~0.167 mm/s), and tests 7/11/12 ramp at ~10x that rate (~1.67 mm/s)
+-- the same three rate groups used for A50V50 elsewhere in the
+cross-material comparison (compare_materials.py, standup_slides.py).
+Plotted as a bold mean curve per rate group with individual specimens
+shown faded (alpha=0.3) behind it.
+
+Test 16 was meant to be a 4th "slow rate" replicate, but is consistently
+and substantially stiffer than tests 4/5/6 from the very start of the ramp
+-- a real specimen-level difference, not a late-stage artifact (see the
+original plot_stress_time.py docstring for details). It is shown here as a
+faded, dotted individual trace for transparency but excluded from the mean
+curve.
+
+Mean curves are built by averaging stress independently on a common time
+grid per rate group (strain isn't perfectly monotonic during the hold, due
+to small viscoelastic drift, so channels are averaged independently rather
+than one against another directly).
 
 Stress is computed from force and the specimen cross-section (6 mm x 2 mm),
 not the instrument's own Ch:Stress channel.
@@ -13,72 +27,89 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from plotstyle import colors, figsize_single, linestyles  # noqa: E402
+from plotstyle import colors, figsize_double  # noqa: E402
 
 CLEANED_DIR = Path(__file__).parent / "cleaned"
-ORIGINAL_CLEANED_DIR = Path(__file__).parent.parent / "A50V50-relax" / "cleaned"
 
 WIDTH_MM = 6.0
 THICKNESS_MM = 2.0
 AREA_MM2 = WIDTH_MM * THICKNESS_MM
+INDIVIDUAL_ALPHA = 0.3
 
-# test_id -> (group label, replicate index within group, cleaned-data directory)
+# test_id -> (rate label, included in the group's mean curve)
 TESTS = {
-    1: ("1 mm, low rate", 0, CLEANED_DIR),
-    2: ("1 mm, low rate", 1, CLEANED_DIR),
-    3: ("1 mm, low rate", 2, CLEANED_DIR),
-    4: ("2 mm, low rate", 0, CLEANED_DIR),
-    5: ("2 mm, low rate", 1, CLEANED_DIR),
-    6: ("2 mm, low rate", 2, CLEANED_DIR),
-    7: ("2 mm, high rate", 0, CLEANED_DIR),
-    11: ("2 mm, high rate", 1, CLEANED_DIR),
-    12: ("2 mm, high rate", 2, CLEANED_DIR),
-    "orig-5": ("6 mm, low rate (original)", 0, ORIGINAL_CLEANED_DIR),
-    "orig-6": ("6 mm, low rate (original)", 1, ORIGINAL_CLEANED_DIR),
-    "orig-7": ("6 mm, 10x rate (original)", 0, ORIGINAL_CLEANED_DIR),
-    "orig-8": ("6 mm, 5x rate (original)", 0, ORIGINAL_CLEANED_DIR),
+    13: ("Very slow rate (0.017 mm/s)", True),
+    14: ("Very slow rate (0.017 mm/s)", True),
+    15: ("Very slow rate (0.017 mm/s)", True),
+    4: ("Slow rate (0.17 mm/s)", True),
+    5: ("Slow rate (0.17 mm/s)", True),
+    6: ("Slow rate (0.17 mm/s)", True),
+    16: ("Slow rate (0.17 mm/s)", False),  # outlier, substantially stiffer; recommend retest
+    7: ("Fast rate (1.67 mm/s)", True),
+    11: ("Fast rate (1.67 mm/s)", True),
+    12: ("Fast rate (1.67 mm/s)", True),
 }
 
-GROUP_LABELS = list(dict.fromkeys(label for label, _, _ in TESTS.values()))
-GROUP_COLOR = {label: colors[i] for i, label in enumerate(GROUP_LABELS)}
+RATE_LABELS = list(dict.fromkeys(label for label, _ in TESTS.values()))
+RATE_COLOR = {label: colors[i] for i, label in enumerate(RATE_LABELS)}
+
+
+def load(test_id):
+    df = pd.read_csv(CLEANED_DIR / f"A50V50-{test_id}_cleaned.csv")
+    df["stress"] = -df["force_N"] / AREA_MM2
+    return df
+
+
+def interp_or_nan(common_time, t, y):
+    """Like np.interp, but NaN past this specimen's own duration instead of
+    clamping to its last value -- so a shorter-duration specimen shrinks
+    the mean's effective N near the tail rather than either truncating the
+    whole mean early or silently biasing it with a flat extrapolation."""
+    values = np.interp(common_time, t, y)
+    values[common_time > t.max()] = np.nan
+    return values
+
+
+def mean_stress(dfs):
+    common_time = np.linspace(0, max(df["time_s"].max() for df in dfs), 5000)
+    stresses = np.array([interp_or_nan(common_time, df["time_s"], df["stress"]) for df in dfs])
+    return common_time, np.nanmean(stresses, axis=0)
 
 
 def main():
-    fig, ((ax_time, ax_strain), (ax_position, ax_position_strain)) = plt.subplots(
-        2, 2, figsize=(2 * figsize_single[0], 2 * figsize_single[1])
+    fig, axes = plt.subplots(
+        1, 3, figsize=(figsize_double[0] * 1.6, figsize_double[1]), sharey=True
     )
 
-    for test_id, (label, rep, cleaned_dir) in TESTS.items():
-        file_id = test_id.split("-")[1] if isinstance(test_id, str) else test_id
-        df = pd.read_csv(cleaned_dir / f"A50V50-{file_id}_cleaned.csv")
-        stress_mpa = -df["force_N"] / AREA_MM2
-        style = dict(
-            color=GROUP_COLOR[label],
-            linestyle=linestyles[rep % len(linestyles)],
-            label=f"{label} (test {file_id})",
-        )
-        ax_time.plot(df["time_s"], stress_mpa, **style)
-        ax_strain.plot(df["strain"], stress_mpa, **style)
-        ax_position.plot(df["position_mm"], stress_mpa, **style)
-        ax_position_strain.plot(df["strain"], df["position_mm"], **style)
+    dfs_by_test = {test_id: load(test_id) for test_id in TESTS}
 
-    ax_time.set_xlabel("Time (s)")
-    ax_time.set_ylabel("Stress (MPa)")
+    for ax, label in zip(axes, RATE_LABELS):
+        color = RATE_COLOR[label]
+        for test_id, (lbl, in_mean) in TESTS.items():
+            if lbl != label:
+                continue
+            df = dfs_by_test[test_id]
+            ax.plot(
+                df["time_s"], df["stress"], color=color, alpha=INDIVIDUAL_ALPHA,
+                linewidth=0.8, linestyle="-" if in_mean else ":",
+                label=f"test {test_id} (excluded)" if not in_mean else None,
+            )
 
-    ax_strain.set_xlabel("Strain (in/in)")
-    ax_strain.set_ylabel("Stress (MPa)")
+        dfs = [dfs_by_test[t] for t, (lbl, in_mean) in TESTS.items() if lbl == label and in_mean]
+        t, stress = mean_stress(dfs)
+        ax.plot(t, stress, color=color, linewidth=1.8, label="mean")
 
-    ax_position.set_xlabel("Position (mm)")
-    ax_position.set_ylabel("Stress (MPa)")
+        ax.set_xlabel("Time (s)")
+        ax.set_title(label, fontsize=9)
+        ax.grid(True, alpha=0.4)
+        ax.legend(fontsize=7)
 
-    ax_position_strain.set_xlabel("Strain (in/in)")
-    ax_position_strain.set_ylabel("Position (mm)")
+    axes[0].set_ylabel("Stress (MPa)")
 
-    handles, labels = ax_time.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=4, fontsize=7, bbox_to_anchor=(0.5, 1.13))
     fig.tight_layout()
 
     out_path = Path(__file__).parent / "stress_overview.pdf"

@@ -1,6 +1,9 @@
-"""Extract storage (E') and loss (E'') moduli from the A25V75 cyclic tests
-(7, 8), correcting for the underlying stress relaxation rather than
+"""Extract storage (E') and loss (E'') moduli from the A0V100 cyclic tests
+(7, 8, 9), correcting for the underlying stress relaxation rather than
 treating the cyclic signal as a clean oscillation about a fixed mean.
+
+Specimen 9 required two retests before a clean run was captured (see
+clean_data.py) -- treat its results with a bit more caution than 7/8.
 
 Method:
 1. Fit a normalized 3-term Prony relaxation shape to the fast-rate
@@ -36,15 +39,21 @@ THICKNESS_MM = 2.0
 AREA_MM2 = WIDTH_MM * THICKNESS_MM
 
 RELAXATION_TESTS = [4, 5, 6]
-CYCLIC_TESTS = {7: colors[0], 8: colors[1]}
+CYCLIC_TESTS = {7: colors[0], 8: colors[1], 9: colors[2]}
+CAUTION_TESTS = {9}
 PROMINENCE_MM = 0.02
 TIME_GRID = np.logspace(np.log10(0.05), np.log10(590), 300)
 
-# the cyclic protocol is a frequency sweep: 20 cycles at each nominal
-# frequency in turn; the first few cycles after a frequency change are a
-# settling transient and excluded from the steady-state summary
-NOMINAL_FREQS_HZ = [0.5, 1, 2, 5, 10]
+# the cyclic protocol is a frequency sweep: ~20 cycles at each nominal
+# frequency in turn (this material's sweep starts lower, at 0.05 Hz); the
+# first few cycles after a frequency change are a settling transient and
+# excluded from the steady-state summary
+NOMINAL_FREQS_HZ = [0.05, 0.5, 1, 2, 5]
 TRANSIENT_CYCLES = 5
+
+
+def label_for(test_id):
+    return f"test {test_id}" + (" (caution)" if test_id in CAUTION_TESTS else "")
 
 
 def assign_nominal_frequency(freq_hz):
@@ -66,7 +75,7 @@ def prony3(t, g_inf, g1, tau1, g2, tau2, g3, tau3):
 def fit_relaxation_shape():
     curves = []
     for test_id in RELAXATION_TESTS:
-        df = pd.read_csv(CLEANED_DIR / f"A25V75-{test_id}_cleaned.csv")
+        df = pd.read_csv(CLEANED_DIR / f"A0V100-{test_id}_cleaned.csv")
         stress = -df["force_N"] / AREA_MM2
         idx_end = find_ramp_end_index(df["position_mm"])
         t_rel = df["time_s"].to_numpy() - df["time_s"].iloc[idx_end]
@@ -169,7 +178,7 @@ def fit_cycle_moduli(df, resid_stress, troughs):
 
 
 def process_test(test_id, shape_params):
-    df = pd.read_csv(CLEANED_DIR / f"A25V75-{test_id}_cyclic_cleaned.csv")
+    df = pd.read_csv(CLEANED_DIR / f"A0V100-{test_id}_cyclic_cleaned.csv")
     df["stress"] = -df["force_N"] / AREA_MM2
     peaks, _ = find_peaks(df["position_mm"], prominence=PROMINENCE_MM)
     troughs, _ = find_peaks(-df["position_mm"], prominence=PROMINENCE_MM)
@@ -214,7 +223,7 @@ def main():
     all_moduli = {}
     for test_id, color in CYCLIC_TESTS.items():
         df, baseline, moduli = process_test(test_id, shape_params)
-        moduli.to_csv(Path(__file__).parent / f"A25V75-{test_id}_dma_moduli.csv", index=False)
+        moduli.to_csv(Path(__file__).parent / f"A0V100-{test_id}_dma_moduli.csv", index=False)
         all_moduli[test_id] = moduli
 
         n_dropped = (~moduli["reliable"]).sum()
@@ -223,14 +232,14 @@ def main():
         good = moduli[moduli["reliable"]]
 
         ax_baseline.plot(df["time_s"], df["stress"], color=color, alpha=0.4, linewidth=0.6)
-        ax_baseline.plot(df["time_s"], baseline, color=color, linewidth=1.5, label=f"test {test_id} baseline")
+        ax_baseline.plot(df["time_s"], baseline, color=color, linewidth=1.5, label=f"{label_for(test_id)} baseline")
 
-        ax_estar.plot(good["cycle"], good["E_star_mpa"], color=color, marker=".", markersize=3, label=f"test {test_id}")
+        ax_estar.plot(good["cycle"], good["E_star_mpa"], color=color, marker=".", markersize=3, label=label_for(test_id))
 
-        ax_moduli.plot(good["cycle"], good["E_storage_mpa"], color=color, linestyle="-", label=f"test {test_id} E'")
-        ax_moduli.plot(good["cycle"], good["E_loss_mpa"], color=color, linestyle="--", label=f"test {test_id} E''")
+        ax_moduli.plot(good["cycle"], good["E_storage_mpa"], color=color, linestyle="-", label=f"{label_for(test_id)} E'")
+        ax_moduli.plot(good["cycle"], good["E_loss_mpa"], color=color, linestyle="--", label=f"{label_for(test_id)} E''")
 
-        ax_tandelta.plot(good["cycle"], good["tan_delta"], color=color, marker=".", markersize=3, label=f"test {test_id}")
+        ax_tandelta.plot(good["cycle"], good["tan_delta"], color=color, marker=".", markersize=3, label=label_for(test_id))
 
     for ax in (ax_estar, ax_moduli, ax_tandelta):
         block_bounds = all_moduli[7].groupby("nominal_frequency_hz")["cycle"].agg(["min", "max"])
@@ -239,24 +248,24 @@ def main():
 
     ax_baseline.set_xlabel("Time (s)")
     ax_baseline.set_ylabel("Stress (MPa)")
-    ax_baseline.legend(fontsize=7)
+    ax_baseline.legend(fontsize=6)
     ax_baseline.grid(True, alpha=0.4)
     ax_baseline.set_title("Raw stress + fitted relaxation baseline", fontsize=9)
 
     ax_estar.set_xlabel("Cycle number")
     ax_estar.set_ylabel("|E*| (MPa)")
-    ax_estar.legend(fontsize=7)
+    ax_estar.legend(fontsize=6)
     ax_estar.grid(True, alpha=0.4)
     ax_estar.set_title("Dotted lines: frequency-sweep block boundaries", fontsize=8)
 
     ax_moduli.set_xlabel("Cycle number")
     ax_moduli.set_ylabel("Modulus (MPa)")
-    ax_moduli.legend(fontsize=7)
+    ax_moduli.legend(fontsize=6)
     ax_moduli.grid(True, alpha=0.4)
 
     ax_tandelta.set_xlabel("Cycle number")
     ax_tandelta.set_ylabel(r"$\tan\delta$")
-    ax_tandelta.legend(fontsize=7)
+    ax_tandelta.legend(fontsize=6)
     ax_tandelta.grid(True, alpha=0.4)
 
     fig.tight_layout()
@@ -275,11 +284,11 @@ def main():
     for test_id, color in CYCLIC_TESTS.items():
         s = summaries[summaries["test"] == test_id]
         ax_mod.errorbar(s["nominal_frequency_hz"], s["E_storage_mean"], yerr=s["E_storage_std"],
-                         color=color, marker="o", linestyle="-", label=f"test {test_id} E'")
+                         color=color, marker="o", linestyle="-", label=f"{label_for(test_id)} E'")
         ax_mod.errorbar(s["nominal_frequency_hz"], s["E_loss_mean"], yerr=s["E_loss_std"],
-                         color=color, marker="s", linestyle="--", label=f"test {test_id} E''")
+                         color=color, marker="s", linestyle="--", label=f"{label_for(test_id)} E''")
         ax_tan.errorbar(s["nominal_frequency_hz"], s["tan_delta_mean"], yerr=s["tan_delta_std"],
-                         color=color, marker="o", linestyle="-", label=f"test {test_id}")
+                         color=color, marker="o", linestyle="-", label=label_for(test_id))
 
     ax_mod.set_xscale("log")
     ax_mod.set_xlabel("Frequency (Hz)")
