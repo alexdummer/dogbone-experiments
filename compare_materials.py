@@ -170,7 +170,7 @@ def main():
 
     # --- comparison figure ---
     fig, ((ax_modulus, ax_rate_sens), (ax_relax, ax_curves)) = plt.subplots(
-        2, 2, figsize=(figsize_double[0] * 1.3, figsize_double[1] * 2.6)
+        2, 2, figsize=(figsize_double[0], figsize_double[1] * 2.6)
     )
 
     material_order = list(MATERIALS.keys())
@@ -256,7 +256,7 @@ def main():
     print(f"saved {out_path2} and {out_path2.with_suffix('.png')}")
 
     # --- relaxation shape comparison: slow vs fast, per material ---
-    fig3, axes3 = plt.subplots(1, 3, figsize=(figsize_double[0] * 1.6, figsize_double[1]), sharey=True)
+    fig3, axes3 = plt.subplots(1, 3, figsize=figsize_double, sharey=True)
     for ax, (material, cfg) in zip(axes3, MATERIALS.items()):
         color = colors[material_order.index(material) + 3]
         for rate_group in ["slow", "fast"]:
@@ -281,7 +281,7 @@ def main():
     print(f"saved {out_path3} and {out_path3.with_suffix('.png')}")
 
     # --- strain-rate dependency: modulus vs rate, per material, all points ---
-    fig4, axes4 = plt.subplots(1, 3, figsize=(figsize_double[0] * 1.6, figsize_double[1]), sharey=False)
+    fig4, axes4 = plt.subplots(1, 3, figsize=figsize_double, sharey=False)
     for ax, (material, cfg) in zip(axes4, MATERIALS.items()):
         s = summary[summary["material"] == material].sort_values("rate_mm_s")
         ax.errorbar(s["rate_mm_s"], s["secant_modulus_mean"], yerr=s["secant_modulus_std"],

@@ -82,7 +82,7 @@ def mean_stress(dfs):
 
 def main():
     fig, axes = plt.subplots(
-        1, 3, figsize=(figsize_double[0] * 1.6, figsize_double[1]), sharey=True
+        1, 3, figsize=figsize_double, sharey=True
     )
 
     dfs_by_test = {test_id: load(test_id) for test_id in TESTS}

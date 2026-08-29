@@ -66,7 +66,7 @@ def main():
     summary = pd.read_csv(BASE / "material_comparison_summary.csv")
 
     all_rows = []
-    fig, axes = plt.subplots(1, 2, figsize=(figsize_double[0] * 1.5, figsize_double[1]), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=figsize_double, sharey=True)
 
     for ax, rate_group in zip(axes, ["slow", "fast"]):
         s = summary[summary["rate_group"] == rate_group].set_index("a_fraction")
@@ -91,7 +91,7 @@ def main():
                      yerr=measured["secant_modulus_std"], fmt="ko", capsize=3,
                      label="measured", zorder=5)
 
-        ax.set_xlabel("A fraction (\\%)")
+        ax.set_xlabel("Agilus fraction (\\%)")
         ax.set_title(f"{rate_group} rate", fontsize=9)
         ax.legend(fontsize=6.5, loc="upper right")
         ax.set_xlim(-2, 102)
