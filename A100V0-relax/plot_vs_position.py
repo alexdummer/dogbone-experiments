@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from plotstyle import colors, figsize_single  # noqa: E402
+from plotstyle import colors, figsize_double  # noqa: E402
 
 CLEANED_DIR = Path(__file__).parent / "cleaned"
 
@@ -109,7 +109,7 @@ def mean_vs_position(ramp_curves, y_index):
 
 
 def plot_vs_position(ramp_by_test, dfs_by_test, y_index, ylabel, out_name):
-    fig, ax = plt.subplots(figsize=figsize_single)
+    fig, ax = plt.subplots(figsize=figsize_double)
 
     for label in RATE_LABELS:
         color = RATE_COLOR[label]
