@@ -2,8 +2,8 @@
 specimen's built-in extensometer channel ("Ch:Strain (in/in)") is garbage
 (huge nonsensical values, e.g. millions of "in/in"), so strain instead
 comes from the two-point videoextensometer (../../tools/dogbone-
-videoextensometer), tracked at the SAME pixel coordinates -- (370, 275) and
-(970, 275) -- confirmed visually on test 1's preview image (both points
+videoextensometer), tracked at the SAME pixel coordinates -- (400, 275) and
+(800, 275) -- confirmed visually on test 1's preview image (both points
 land inside the parallel gauge section, vertically centered in the neck
 and clear of the shoulders, on visible surface speckle texture) and
 reused unchanged on every other test,
@@ -12,6 +12,25 @@ videoextensometer.py's `track` subcommand on each raw .MOV file in the
 2026_09_07/ subfolder -- new data drops for this material are expected to
 land in their own dated subfolder as they arrive, unlike the other
 materials' flat layout).
+
+Originally tracked at (370, 275)/(970, 275): too close to the right
+shoulder for how far this material actually stretches. The right point
+is the one that (almost) all of the real elongation shows up as, in
+camera-frame terms -- confirmed directly by comparing pt1/pt2 drift, not
+assumed -- and at ~8-10% engineering strain it had drifted ~70px, right
+up against where the shoulder fillet visibly starts curving (confirmed
+by overlaying the tracked point on the frame). Past that point there's
+essentially no more local motion to track, so strain plateaus well
+before the machine ramp actually ends (as little as ~88% of the way
+through, across the original 9 tests) -- not a synchronization bug (a
+2x larger LK search window made no difference) and not a video-coverage
+problem (video_time_s comfortably exceeds the machine ramp end in every
+case this affects). Re-tracked at the coordinates above, with much more
+margin before the shoulder on the drifting side; freeze point across all
+9 tests moved from 88-99% to 91-100% of the ramp. Test 8 is the
+remaining outlier (freezes at ~91%) -- that one's a genuine video-
+coverage shortfall (see the WARNING below), not the shoulder-drift
+issue, and isn't fixable by re-tracking the same footage.
 
 This is the full dataset: all 9 of the eventual 9 tests (3 loading rates x 3
 reps) are usable. Tests 1-3 share one ramp rate (~29.7s ramp, "slow" tier,
