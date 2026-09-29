@@ -49,6 +49,12 @@ dogbone-experiments/
 │   ├── cad/                           # Unified generator (create_specimens.py, dogbone.stl)
 │   └── slices/                        # OpenVCAD PNG print slices (git-untracked)
 │
+├── code/                              # Pinned code dependencies (Git submodules)
+│   ├── EdelweissFE/                   # Nonlinear FE solver backend (branch: alex/prepare-for-zenodo)
+│   ├── Marmot/                        # Material Modeling Toolbox (branch: feature/bergstrom-boyce)
+│   ├── Fastor/                        # SIMD tensor algebra library for C++
+│   └── dogbone-videoextensometer/     # Optical videoextensometer & tracking CLI
+│
 └── analysis/                          # Publication figures & cross-cutting synthesis
     ├── plotstyle.py                   # Central styling module (colorblind palette, LaTeX labels)
     ├── compare_materials.py           # Multi-material tensile comparison figures
@@ -122,3 +128,24 @@ The dogbone lattice FE model exploits three mirror symmetry planes:
    python analysis/plot_lattice_experiment_sim_comparison.py
    python analysis/plot_lattice_stress_contours.py
    ```
+
+---
+
+## Code Submodules & Computational Dependencies
+
+To reproduce the computational modeling and optical tracking pipelines, initialize the pinned Git submodules in `code/`:
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules git@github.com:alexdummer/dogbone-experiments.git
+
+# Or in an existing clone:
+git submodule update --init --recursive
+```
+
+The pinned modules under `code/` provide:
+- **`code/EdelweissFE`**: Finite-element solver backend used for all 3D boundary-value simulations (branch: `alex/prepare-for-zenodo`).
+- **`code/Marmot`**: C++ constitutive modeling library with Python bindings, implementing the 3D QLV Mooney-Rivlin + Prony series and Bergström-Boyce models (branch: `feature/bergstrom-boyce`).
+- **`code/Fastor`**: SIMD tensor algebra library required for building Marmot.
+- **`code/dogbone-videoextensometer`**: Optical-flow videoextensometer CLI tool used for tracking shoulder drift and true strain in soft photopolymers ($A75V25$ and $A100V0$).
+

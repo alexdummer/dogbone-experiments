@@ -1,0 +1,15 @@
+[submodule "code/dogbone-videoextensometer"]
+	path = code/dogbone-videoextensometer
+	url = ../dogbone-videoextensometer.git
+[submodule "code/Marmot"]
+	path = code/Marmot
+	url = ../Marmot.git
+	branch = feature/bergstrom-boyce
+[submodule "code/Fastor"]
+	path = code/Fastor
+	url = https://github.com/romeric/Fastor.git
+[submodule "code/EdelweissFE"]
+	path = code/EdelweissFE
+	url = ../EdelweissFE.git
+	branch = alex/prepare-for-zenodo
+
