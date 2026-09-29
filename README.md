@@ -50,7 +50,7 @@ dogbone-experiments/
 │   └── slices/                        # OpenVCAD PNG print slices (git-untracked)
 │
 ├── code/                              # Pinned code dependencies (Git submodules)
-│   ├── EdelweissFE/                   # Nonlinear FE solver backend (branch: alex/prepare-for-zenodo)
+│   ├── EdelweissFE/                   # Nonlinear FE solver backend (branch: next_v26.11)
 │   ├── Marmot/                        # Material Modeling Toolbox (branch: feature/bergstrom-boyce)
 │   ├── Fastor/                        # SIMD tensor algebra library for C++
 │   └── dogbone-videoextensometer/     # Optical videoextensometer & tracking CLI
@@ -133,7 +133,7 @@ The dogbone lattice FE model exploits three mirror symmetry planes:
 
 ## Code Submodules & Computational Dependencies
 
-To reproduce the computational modeling and optical tracking pipelines, initialize the pinned Git submodules in `code/`:
+To reproduce the constitutive model fittings, finite element simulations, and optical tracking pipelines, initialize the pinned Git submodules in `code/`:
 
 ```bash
 # Clone with submodules
@@ -144,8 +144,43 @@ git submodule update --init --recursive
 ```
 
 The pinned modules under `code/` provide:
-- **`code/EdelweissFE`**: Finite-element solver backend used for all 3D boundary-value simulations (branch: `alex/prepare-for-zenodo`).
+- **`code/EdelweissFE`**: Finite-element solver backend used for all 3D boundary-value simulations (branch: `next_v26.11`).
 - **`code/Marmot`**: C++ constitutive modeling library with Python bindings, implementing the 3D QLV Mooney-Rivlin + Prony series and Bergström-Boyce models (branch: `feature/bergstrom-boyce`).
 - **`code/Fastor`**: SIMD tensor algebra library required for building Marmot.
 - **`code/dogbone-videoextensometer`**: Optical-flow videoextensometer CLI tool used for tracking shoulder drift and true strain in soft photopolymers ($A75V25$ and $A100V0$).
+
+### Setting Up the Simulation Environment (`edelweissfe`)
+
+EdelweissFE runs on free-threaded Python 3.14 (`cp314t`) with full parallel element evaluation (`PYTHON_GIL=0`). Set up the environment and compile Marmot and EdelweissFE with:
+
+```bash
+# 1. Create dedicated conda environment from pinned official package
+conda create -n edelweissfe -y -c https://repo.prefix.dev/matthiasneuner/edelweiss -c conda-forge edelweissfe-dev=2026.09.28.2
+conda activate edelweissfe
+
+# 2. Build and install Marmot into the conda environment
+cmake -S code/Marmot -B code/Marmot/build \
+      -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX \
+      -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
+      -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF
+cmake --build code/Marmot/build -j$(nproc)
+cmake --install code/Marmot/build
+
+# 3. Install EdelweissFE in editable mode and additional simulation dependencies
+pip install -v -e code/EdelweissFE
+pip install pandas seaborn
+
+# 4. Verify test suite (free-threaded execution)
+PYTHON_GIL=0 run_tests_edelweissfe code/EdelweissFE/testfiles/edelweiss-only/
+PYTHON_GIL=0 run_tests_edelweissfe code/EdelweissFE/testfiles/marmot/
+```
+
+### Running Simulations with EdelweissFE
+
+```bash
+conda activate edelweissfe
+# Run single job deck
+edelweissfe simulations/fe-tension/jobs/A0V100/A0V100_relax.inp
+```
+
 

@@ -21,7 +21,7 @@ dogbone-experiments/
 │   ├── cad/                  # Specimen generators (create_specimens.py, dogbone.stl)
 │   └── slices/               # Untracked OpenVCAD PNG print slices (tensile-flat/, tensile-lattice/, dma/, bending/)
 ├── code/                     # Git submodules for computational code backends
-│   ├── EdelweissFE/          # Nonlinear FE solver backend (branch: alex/prepare-for-zenodo)
+│   ├── EdelweissFE/          # Nonlinear FE solver backend (branch: next_v26.11)
 │   ├── Marmot/               # Constitutive modeling C++ library (branch: feature/bergstrom-boyce)
 │   ├── Fastor/               # SIMD tensor algebra library
 │   └── dogbone-videoextensometer/ # Optical videoextensometer & tracking CLI
@@ -60,8 +60,16 @@ All hyperelastic bases in `Marmot` compose $\Psi = \Psi_{\text{iso}}(\bar{I}_1, 
 ### Fitting & Solver Robustness
 - **Residual Weighting**: Always apply $1/\sqrt{n_{\text{phase}}}$ weighting between the ramp and hold phases; without it, dense ramp sampling silently dominates the objective.
 - **Bergström-Boyce Return Mapping**: The non-linear Newton-Raphson return-mapping algorithm exhibits seed sensitivity near local optima. Always multi-start fits (`fit_bb_model.py`) using nudge clusters or random restarts.
-- **Installed Library**: Python Marmot bindings link against `/home/alex/miniforge3/envs/marmot/lib/libMarmot.so.1`. If C++ code in `code/Marmot` is modified, `make -j$(nproc) && make install` is mandatory.
-- **EdelweissFE Installation**: EdelweissFE is pinned under `code/EdelweissFE` (branch `alex/prepare-for-zenodo`). For local editable installation into the environment: `pip install -e code/EdelweissFE`.
+- **Simulation Environment (`edelweissfe`)**:
+  - Pinned conda environment with free-threaded Python 3.14 (`cp314t`).
+  - Activate via `conda activate edelweissfe` or invoke directly via `conda run -n edelweissfe <cmd>`.
+  - Always execute EdelweissFE with free-threaded parallelism enabled: `PYTHON_GIL=0 edelweissfe <deck>.inp`.
+- **Installed Library**: Python Marmot bindings and EdelweissFE extensions link against `$CONDA_PREFIX/lib/libMarmot.so.1`. If C++ code in `code/Marmot` is modified:
+  ```bash
+  cmake --build code/Marmot/build -j$(nproc) && cmake --install code/Marmot/build
+  pip install -v -e code/EdelweissFE
+  ```
+- **EdelweissFE Installation**: EdelweissFE is pinned under `code/EdelweissFE` (branch `next_v26.11`). For local editable installation into the environment: `pip install -e code/EdelweissFE`.
 - **Submodule Updates**: Never run arbitrary branch rebases in `code/` submodules without verifying that tests and calibration results in `simulations/` remain bit-identical.
 
 ---

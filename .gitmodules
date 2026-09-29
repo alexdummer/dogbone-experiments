@@ -11,5 +11,6 @@
 [submodule "code/EdelweissFE"]
 	path = code/EdelweissFE
 	url = ../EdelweissFE.git
-	branch = alex/prepare-for-zenodo
+	branch = next_v26.11
+
 
