@@ -1,0 +1,17 @@
+** PRF (2-network nonlinear viscoelastic) parameters for A25V75
+** Network A (equilibrium), 1-term Ogden:
+*HYPERELASTIC, OGDEN, N=1
+293.572, 0.5, 0.0
+**
+** Network B (flow), 1-term Ogden acting on elastic stretch lambda_e:
+*HYPERELASTIC, OGDEN, N=1
+263.907, 0.690317, 0.0
+**
+** Flow law: dlambda_v/dt = A_flow * lambda_v * sigma_B(lambda_e)**m_flow
+** A_flow = 1e-05   m_flow = 2.37104
+** Map onto Abaqus's *VISCOELASTIC, NONLINEAR parallel-network flow
+** parameters (exact keyword/parameter names are version-dependent --
+** verify against Abaqus Analysis User's Guide for the target release).
+**
+** D_p = 0 (fully incompressible) assumed for both networks: uniaxial
+** tension data alone cannot identify compressibility.

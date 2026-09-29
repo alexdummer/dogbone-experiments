@@ -1,0 +1,19 @@
+# A100V0 -- Ogden (N=2) + Prony (N=3) QLV parameters
+# Units: stress in MPa, time in seconds
+
+*HYPERELASTIC, OGDEN, N=2
+** mu1, alpha1, mu2, alpha2, D1, D2
+0.0001, 1.95065, 1.42296, -3.68176, 0, 0
+
+*VISCOELASTIC, TIME=PRONY
+** g_i^P, k_i^P, tau_i
+0.14499, 0.14499, 0.113883
+0.153361, 0.153361, 2.52837
+0.108431, 0.108431, 51.1875
+
+** implied g_inf (long-term/instantaneous stiffness ratio) = 0.5932
+** Ogden fit R2 = 0.5988 (fit strain range: 0 to 0.366)
+** Prony fit rms residual = 0.004886 (n=9 curves, all rate groups)
+** CAUTION: D1=D2=0 assumes full incompressibility -- these are
+** uniaxial tests with no transverse strain measurement, so
+** compressibility is NOT identified from this data.

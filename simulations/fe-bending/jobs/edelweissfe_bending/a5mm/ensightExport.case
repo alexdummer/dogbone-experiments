@@ -1,0 +1,64 @@
+FORMAT
+type: ensight gold
+TIME
+time set: 2 no description
+number of steps: 1
+filename start number: 0
+filename increment: 1
+time values: 0.00000000e+00
+time set: 1 no description
+number of steps: 42
+filename start number: 0
+filename increment: 1
+time values: 0.00000000e+00
+9.00000000e+00
+1.80000000e+01
+2.70000000e+01
+3.60000000e+01
+4.50000000e+01
+5.40000000e+01
+6.30000000e+01
+7.20000000e+01
+8.10000000e+01
+9.00000000e+01
+9.90000000e+01
+1.08000000e+02
+1.17000000e+02
+1.26000000e+02
+1.35000000e+02
+1.44000000e+02
+1.53000000e+02
+1.62000000e+02
+1.71000000e+02
+1.80000000e+02
+1.80000000e+02
+2.01000000e+02
+2.22000000e+02
+2.43000000e+02
+2.64000000e+02
+2.85000000e+02
+3.06000000e+02
+3.27000000e+02
+3.48000000e+02
+3.69000000e+02
+3.90000000e+02
+4.11000000e+02
+4.32000000e+02
+4.53000000e+02
+4.74000000e+02
+4.95000000e+02
+5.16000000e+02
+5.37000000e+02
+5.58000000e+02
+5.79000000e+02
+6.00000000e+02
+FILE
+file set: 2
+number of steps: 1
+file set: 1
+number of steps: 42
+GEOMETRY
+model: 2 2 ensightExport/geometry.geo
+VARIABLE
+vector per node: 1 1 displacement ensightExport/displacement.var
+tensor asym per element: 1 1 stress ensightExport/stress.var

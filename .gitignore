@@ -1,13 +1,35 @@
-# raw instrument exports (large, not needed to reproduce plots from cleaned data)
+# Raw data dumps, video recordings, and temporary frame dumps (large instrument exports)
+**/raw/
 raw/
+**/untracked/
+**/tests/
+**/archive*/
+**/*_temp_frames/
+*.MOV
+*.mov
+*.mp4
+*.avi
 
-# rendered plot outputs (regenerate from the scripts + cleaned data)
+# FE detailed full-field exports (gripForce.csv and gripDisp.csv are tracked)
+**/ensightExport/
+ensightExport/
+
+# Generated print slice stacks (heavy OpenVCAD PNG stacks)
+**/slices/
+
+# Rendered plot outputs (regenerate from scripts + data)
 *.pdf
 *.png
 
-# python
+# Python & environment
 __pycache__/
 *.pyc
+*.pyo
+.agents/
+.claude/
+*.log
+*.bak*
 
 # OS
 .DS_Store
+
