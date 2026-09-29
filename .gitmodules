@@ -5,9 +5,6 @@
 	path = code/Marmot
 	url = ../Marmot.git
 	branch = feature/bergstrom-boyce
-[submodule "code/Fastor"]
-	path = code/Fastor
-	url = https://github.com/romeric/Fastor.git
 [submodule "code/EdelweissFE"]
 	path = code/EdelweissFE
 	url = ../EdelweissFE.git

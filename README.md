@@ -52,7 +52,6 @@ dogbone-experiments/
 ├── code/                              # Pinned code dependencies (Git submodules)
 │   ├── EdelweissFE/                   # Nonlinear FE solver backend (branch: next_v26.11)
 │   ├── Marmot/                        # Material Modeling Toolbox (branch: feature/bergstrom-boyce)
-│   ├── Fastor/                        # SIMD tensor algebra library for C++
 │   └── dogbone-videoextensometer/     # Optical videoextensometer & tracking CLI
 │
 └── analysis/                          # Publication figures & cross-cutting synthesis
@@ -145,8 +144,7 @@ git submodule update --init --recursive
 
 The pinned modules under `code/` provide:
 - **`code/EdelweissFE`**: Finite-element solver backend used for all 3D boundary-value simulations (branch: `next_v26.11`).
-- **`code/Marmot`**: C++ constitutive modeling library with Python bindings, implementing the 3D QLV Mooney-Rivlin + Prony series and Bergström-Boyce models (branch: `feature/bergstrom-boyce`).
-- **`code/Fastor`**: SIMD tensor algebra library required for building Marmot.
+- **`code/Marmot`**: C++ constitutive modeling library with Python bindings, implementing the 3D QLV Mooney-Rivlin + Prony series and Bergström-Boyce models (branch: `feature/bergstrom-boyce`). Note: Marmot's C++ header dependencies (`Fastor`, `Eigen3`, `autodiff`) are provided directly by the conda environment.
 - **`code/dogbone-videoextensometer`**: Optical-flow videoextensometer CLI tool used for tracking shoulder drift and true strain in soft photopolymers ($A75V25$ and $A100V0$).
 
 ### Setting Up the Simulation Environment (`edelweissfe`)

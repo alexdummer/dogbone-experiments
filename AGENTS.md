@@ -23,7 +23,6 @@ dogbone-experiments/
 ├── code/                     # Git submodules for computational code backends
 │   ├── EdelweissFE/          # Nonlinear FE solver backend (branch: next_v26.11)
 │   ├── Marmot/               # Constitutive modeling C++ library (branch: feature/bergstrom-boyce)
-│   ├── Fastor/               # SIMD tensor algebra library
 │   └── dogbone-videoextensometer/ # Optical videoextensometer & tracking CLI
 └── analysis/                 # Publication figures & cross-material synthesis (plotstyle.py, compare_materials.py, plot_lattice_*.py)
 ```
