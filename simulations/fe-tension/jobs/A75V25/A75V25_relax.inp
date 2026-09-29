@@ -73,7 +73,7 @@ fieldOutput=gripForce
 ** the solver can still cut back if a 5%-of-ramp jump doesn't converge
 ** (unlike the hold step, large-displacement materials may need this).
 startInc=0.05, maxInc=0.05, minInc=1e-4, maxNumInc=100000, maxIter=25, stepLength=29.722
->>options, category=NISTSolver, extrapolation=linear, linsolver=pardiso
+>>options, name=theSolver, extrapolation=linear, linsolver=pardiso
 >>dirichlet, name=xsym, nSet=xSymmetry, field=displacement, 1=0
 >>dirichlet, name=ysym, nSet=ySymmetry, field=displacement, 2=0
 >>dirichlet, name=zsym, nSet=zSymmetry, field=displacement, 3=0
@@ -89,4 +89,4 @@ startInc=0.05, maxInc=0.05, minInc=1e-4, maxNumInc=100000, maxIter=25, stepLengt
 ** increment failed to converge with no room to shrink when minInc was
 ** rigidly pinned to 0.05 too).
 startInc=0.05, maxInc=0.05, minInc=1e-4, maxNumInc=100000, maxIter=25, stepLength=600.999
->>options, category=NISTSolver, extrapolation=linear, linsolver=pardiso
+>>options, name=theSolver, extrapolation=linear, linsolver=pardiso

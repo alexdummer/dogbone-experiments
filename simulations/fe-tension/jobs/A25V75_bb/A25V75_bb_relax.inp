@@ -57,7 +57,7 @@ fieldOutput=gripForce
 
 *step, solver=theSolver
 startInc=0.05, maxInc=0.05, minInc=1e-6, maxNumInc=100000, maxIter=25, stepLength=5.934
->>options, category=NISTSolver, extrapolation=linear, linsolver=pardiso
+>>options, name=theSolver, extrapolation=linear, linsolver=pardiso
 ** BergstromBoyce's state (Fv, the network-B viscous deformation gradient)
 ** must be initialized to the identity, not left at EdelweissFE's generic
 ** all-zeros default -- a zero Fv is singular (Fastor::inverse(Fv) at the
@@ -73,4 +73,4 @@ startInc=0.05, maxInc=0.05, minInc=1e-6, maxNumInc=100000, maxIter=25, stepLengt
 
 *step, solver=theSolver
 startInc=0.05, maxInc=0.05, minInc=1e-6, maxNumInc=100000, maxIter=25, stepLength=600.858
->>options, category=NISTSolver, extrapolation=linear, linsolver=pardiso
+>>options, name=theSolver, extrapolation=linear, linsolver=pardiso
