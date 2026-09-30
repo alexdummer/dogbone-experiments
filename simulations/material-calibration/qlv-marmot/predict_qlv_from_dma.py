@@ -339,11 +339,13 @@ def run_material_pipeline(mat, cal_rate_group="fast", n_terms=6):
 
     return {
         "mat": mat,
+        "dma_fit": dma_fit,
         "C1": C1,
         "C2": C2,
         "gammas": gammas,
         "taus": taus,
         "sim_results": sim_results,
+        "joint_sim": joint_sim,
     }
 
 
@@ -420,6 +422,179 @@ def plot_results(mat, dma_fit, sim_results, joint_sim, cal_rate_group, C1, C2):
     print(f"\n[Saved figure]: {out_pdf}")
 
 
+def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
+    import seaborn as sns
+    from matplotlib.lines import Line2D
+
+    # Setup publication theme
+    sns.set_theme(
+        context="paper",
+        style="ticks",
+        font_scale=0.88,
+        rc={
+            "lines.linewidth": 1.1,
+            "text.usetex": True,
+            "font.family": "cm",
+            "legend.frameon": False,
+            "legend.fontsize": "small",
+        },
+    )
+    palette = sns.color_palette("colorblind")
+    mat_colors = {
+        "A0V100": palette[0],
+        "A25V75": palette[1],
+        "A50V50": palette[2],
+        "A75V25": palette[3],
+        "A100V0": palette[4],
+    }
+    mat_order = ["A0V100", "A25V75", "A50V50", "A75V25", "A100V0"]
+    mat_labels = {
+        "A0V100": "A0V100 (0\\% AB)",
+        "A25V75": "A25V75 (25\\% AB)",
+        "A50V50": "A50V50 (50\\% AB)",
+        "A75V25": "A75V25 (75\\% AB)",
+        "A100V0": "A100V0 (100\\% AB)",
+    }
+    rate_groups = ["very slow", "slow", "fast"]
+
+    fig, axes = plt.subplots(5, 4, figsize=(18 / 2.54, 19.5 / 2.54))
+
+    for r, mat in enumerate(mat_order):
+        res = all_results[mat]
+        dma_fit = res["dma_fit"]
+        color = mat_colors[mat]
+
+        # Col 0: DMA Master Curve
+        ax0 = axes[r, 0]
+        w_dense = np.logspace(np.log10(dma_fit["omega"].min()) - 0.5, np.log10(dma_fit["omega"].max()) + 0.5, 200)
+        freq_dense = w_dense / (2 * np.pi)
+        E_dense = dma_fit["E_inf"] * np.ones_like(w_dense)
+        for g, t in zip(dma_fit["gammas"], dma_fit["taus"]):
+            w2t2 = (w_dense * t) ** 2
+            E_dense += (g * dma_fit["E0"]) * (w2t2 / (1.0 + w2t2))
+
+        ax0.loglog(dma_fit["freq"], dma_fit["E_prime_data"], "o", markersize=2.0, color="gray", alpha=0.55, zorder=2)
+        ax0.loglog(freq_dense, E_dense, "-", color=color, linewidth=1.4, zorder=3)
+        ax0.set_ylabel(f"\\textbf{{{mat}}}\nStorage $E'$ (MPa)", fontsize=7.2)
+        if r == 4:
+            ax0.set_xlabel("Reduced freq. $f_r$ (Hz)", fontsize=7.5)
+        ax0.grid(True, alpha=0.3, linewidth=0.5)
+        if r == 0:
+            ax0.set_title(r"(a) DMA Master ($20^\circ$C)", fontsize=8, fontweight="bold")
+        ax0.text(0.06, 0.08, f"$E_0={dma_fit['E0']:.0f}$", transform=ax0.transAxes, fontsize=5.8,
+                 bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.75, edgecolor="none"))
+
+        # Max peak stress across rates for consistent y-limits
+        max_peak = max(res["sim_results"][rg]["peak_exp"] for rg in rate_groups)
+        y_max = 1.16 * max_peak
+
+        # Cols 1, 2, 3: Rates
+        for c_idx, rg in enumerate(rate_groups, start=1):
+            ax = axes[r, c_idx]
+            sres = res["sim_results"][rg]
+            jsim = res["joint_sim"][rg] if res["joint_sim"] is not None else None
+
+            # Measured test curve
+            ax.plot(sres["t"], sres["stress_exp"], color="gray", linewidth=2.0, alpha=0.5, zorder=1)
+            # DMA-calibrated QLV
+            ax.plot(sres["t"], sres["stress_pred"], "-", color=color, linewidth=1.3, zorder=3)
+            # Joint-fit baseline
+            if jsim is not None:
+                ax.plot(jsim["t"], jsim["stress_pred"], ":", color="black", linewidth=0.9, zorder=2)
+
+            ax.set_xscale("log")
+            ax.set_xlim(0.2, 650)
+            ax.set_ylim(0, y_max)
+            ax.grid(True, alpha=0.3, linewidth=0.5)
+
+            if c_idx == 1:
+                ax.set_ylabel(r"Stress $\sigma$ (MPa)", fontsize=7.2)
+            else:
+                ax.tick_params(labelleft=False)
+
+            if r == 4:
+                ax.set_xlabel(r"Time $t$ (s)", fontsize=7.5)
+
+            if r == 0:
+                col_titles = [r"(b) Very Slow ($0.017\,\mathrm{mm/s}$)",
+                              r"(c) Slow ($0.167\,\mathrm{mm/s}$)",
+                              r"(d) Fast ($1.67\,\mathrm{mm/s}$)"]
+                ax.set_title(col_titles[c_idx - 1], fontsize=8, fontweight="bold")
+
+            # Annotation badge
+            is_cal = (rg == cal_rate_group)
+            tag_label = "Cal. Ramp" if is_cal else "Blind Pred."
+            err_text = f"{tag_label}\nRMSE: {sres['rmse_pct']:.1f}\\%"
+            ax.text(0.95, 0.94, err_text, transform=ax.transAxes, fontsize=5.6,
+                    ha="right", va="top",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.75, edgecolor="none"))
+
+    # Global legend
+    legend_handles = [
+        Line2D([0], [0], color="gray", linewidth=2.0, alpha=0.5, label="Measured tensile test"),
+        Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated QLV (1 ramp)"),
+        Line2D([0], [0], color="black", linestyle=":", linewidth=1.0, label="Joint 3-rate fitted baseline"),
+    ]
+    fig.legend(handles=legend_handles, loc="upper center", ncol=3, fontsize=7.5,
+               bbox_to_anchor=(0.5, 0.995), frameon=False)
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
+
+    # Save to paper figures and analysis
+    paper_dir = Path(__file__).resolve().parents[4] / "paper"
+    if not paper_dir.is_dir():
+        paper_dir = Path(__file__).resolve().parents[3] / "paper"
+    fig_dir = paper_dir / "figures"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+
+    fig_pdf = fig_dir / "dma_qlv_validation_grid.pdf"
+    fig_png = fig_dir / "dma_qlv_validation_grid.png"
+    fig.savefig(fig_pdf, dpi=300)
+    fig.savefig(fig_png, dpi=300)
+    fig.savefig(OUTPUT_DIR / "dma_qlv_validation_grid.pdf", dpi=300)
+    fig.savefig(OUTPUT_DIR / "dma_qlv_validation_grid.png", dpi=300)
+    plt.close(fig)
+    print(f"\n[Saved Grid Figure]: {fig_pdf}")
+
+    # Build LaTeX Table
+    table_path = paper_dir / "dma_qlv_summary_table.tex"
+    table_tex = [
+        "% Auto-generated summary table for DMA-calibrated QLV model",
+        "\\begin{table}[htpb!]",
+        "    \\centering",
+        "    \\small",
+        "    \\caption{Cross-modality parameter calibration: Generalized-Maxwell (Mooney--Rivlin) constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$, 6 Maxwell elements) and calibrated on a single slow loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are shown for the calibration ramp and blind forward predictions across rates, compared against the jointly fitted 3-rate baseline.}",
+        "    \\label{tab:dma-qlv-summary}",
+        "    \\begin{tabular}{lcccccccc}",
+        "        \\toprule",
+        "        Blend & DMA $E_0$ & DMA $E_\\infty$ & $C_1$ & $C_2$ & $E_{\\mathrm{inst}}$ & Very Slow RMSE & Slow (Cal) RMSE & Fast RMSE \\\\",
+        "         & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (Blind, \\%) & (Ramp, \\%) & (Blind, \\%) \\\\",
+        "        \\midrule",
+    ]
+
+    for mat in mat_order:
+        res = all_results[mat]
+        dma_fit = res["dma_fit"]
+        C1, C2 = res["C1"], res["C2"]
+        E_inst = 6.0 * (C1 + C2)
+        vs = res["sim_results"]["very slow"]["rmse_pct"]
+        sl = res["sim_results"]["slow"]["rmse_pct"]
+        fs = res["sim_results"]["fast"]["rmse_pct"]
+
+        table_tex.append(
+            f"        {mat} & {dma_fit['E0']:.1f} & {dma_fit['E_inf']:.1f} & {C1:.2f} & {C2:.2f} & {E_inst:.1f} & {vs:.1f}\\% & {sl:.1f}\\% & {fs:.1f}\\% \\\\"
+        )
+
+    table_tex.extend([
+        "        \\bottomrule",
+        "    \\end{tabular}",
+        "\\end{table}",
+    ])
+
+    with open(table_path, "w") as f:
+        f.write("\n".join(table_tex))
+    print(f"[Saved Summary Table]: {table_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Predict tensile stress relaxation from DMA master curves")
     parser.add_argument("--material", default="A25V75", choices=list(MATERIALS.keys()) + ["all"],
@@ -433,8 +608,10 @@ def main():
     materials = list(MATERIALS.keys()) if args.material == "all" else [args.material]
 
     all_summary = []
+    all_results = {}
     for mat in materials:
         res = run_material_pipeline(mat, cal_rate_group=args.ramp_rate, n_terms=args.n_terms)
+        all_results[mat] = res
         for rg, sres in res["sim_results"].items():
             all_summary.append({
                 "material": mat,
@@ -453,6 +630,9 @@ def main():
     summary_csv = OUTPUT_DIR / "qlv_dma_prediction_summary.csv"
     summary_df.to_csv(summary_csv, index=False)
     print(f"\nSaved summary table to: {summary_csv}")
+
+    if args.material == "all":
+        generate_paper_dma_qlv_grid(all_results, cal_rate_group=args.ramp_rate, n_terms=args.n_terms)
 
 
 if __name__ == "__main__":
