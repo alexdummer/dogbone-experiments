@@ -64,10 +64,16 @@ QUALIFYING_REPLICATES = {
     "A100V0": ["A100V0-1", "A100V0-2", "A100V0-3"],
 }
 
-BASE_DIR = Path(__file__).resolve().parents[3]
+# Detect paper repo location (supports both top-level 3D-printing/paper and dogbone-experiments/paper)
+candidates = [
+    Path(__file__).resolve().parents[4] / "paper",
+    Path(__file__).resolve().parents[3] / "paper",
+]
+PAPER_DIR = next((p for p in candidates if p.is_dir()), Path(__file__).resolve().parents[3] / "paper")
 DATA_DIR = Path(__file__).resolve().parents[1] / "raw"
-FIG_DIR = BASE_DIR / "paper" / "figures"
+FIG_DIR = PAPER_DIR / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
+summary_table_path = PAPER_DIR / "dma_summary_table.tex"
 
 
 def pooled_smoothing_spline(x_all, y_all, grid):
@@ -337,7 +343,7 @@ plt.close(fig)
 # -------------------------------------------------------------
 # 3. Generate Updated LaTeX Summary Table
 # -------------------------------------------------------------
-summary_table_path = BASE_DIR / "paper" / "dma_summary_table.tex"
+summary_table_path = PAPER_DIR / "dma_summary_table.tex"
 
 table_tex = [
     "% Auto-generated DMA summary table showing all replicates and mean values",
