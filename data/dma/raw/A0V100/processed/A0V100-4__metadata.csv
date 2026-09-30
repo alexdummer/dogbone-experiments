@@ -1,0 +1,63 @@
+key,value
+Filename,A0V100-4
+Instrument name,4020-0324
+Operator,AD
+rundate,9/24/2026
+Sample name,A0V100-4
+Geometry name,Tension fixture (rectangle)
+Procedure name,TMA IsoForce Temperature Ramp
+proceduresegments,TMA IsoForce Temperature Ramp#Flow Axial Test#Standard Oscillatory Temperature Sweep
+File Parameters.Name,A0V100-4
+File Parameters.Instrument type,RSAG2
+File Parameters.Instrument serial number,4020-0324
+File Parameters.Instrument name,4020-0324
+File Parameters.Instrument location,Univ of Colorado
+File Parameters.Company name,Univ of Colorado
+File Parameters.Trios version,5.1.1.46572
+File Parameters.File name,C:\ProgramData\TA Instruments\TRIOS\Data\Alex\A0V100-4.tri
+File Parameters.Run date,9/24/2026 4:20:03 PM
+File Parameters.Time at start of test,24.2240
+Geometry Parameters.Geometry Type,Linear tension
+Geometry Parameters.Name,Tension fixture (rectangle)
+Geometry Parameters.Length,10.6 mm
+Geometry Parameters.Width,3.0 mm
+Geometry Parameters.Thickness,1.0 mm
+Geometry Parameters.Loading gap,10.6 mm
+Geometry Parameters.Notes,
+Geometry Extended Parameters.Expansion coefficient,2.6 µm/°C
+Geometry Extended Parameters.Move stage to maintain starting gap,Passive
+Geometry Extended Parameters.Orientation Angle,0.0
+Geometry Extended Parameters.Upper Compliance,0.0 µm/kg
+Geometry Extended Parameters.Lower Compliance,0.0 µm/kg
+Geometry Extended Parameters.Upper Geometry Mass,95.62 g
+Geometry Extended Parameters.Stress constant (linear),333333 Pa/N
+Geometry Extended Parameters.Strain constant (linear),94.3396 1/m
+Instrument Parameters.GapZeroSetback,1000 [mm]
+Instrument Parameters.GapFast,0.0100000
+Instrument Parameters.GapSlow,1.00000e-5
+Instrument Parameters.Temperature limit,620.000 [°C]
+Firmware Versions.InfoVerDsp,V2018.5.29
+Firmware Versions.InfoVerWinCe,V2019.10.10
+Firmware Versions.InfoVerPwr1,V2017.1.11
+Firmware Versions.InfoVerLincodr2,V2017.1.11
+Firmware Versions.InfoVerStepper3,V2017.1.11
+Firmware Versions.InfoVerPhaseFire6,V2019.7.19
+Firmware Versions.InfoVerFcoPrt8,V2011.9.7
+Calibration Date Information.InfoDateDynPhase,8/7/2019 6:40 PM
+Calibration Date Information.InfoDateStaticNrm,5/3/2024 1:39 PM
+Calibration Date Information.InfoDateTorqLag,3/2/2018 1:31 PM
+Calibration Date Information.InfoDateMotorScale,3/2/2018 12:07 PM
+Calibration Date Information.InfoDateRsaDeflect,3/2/2018 12:58 PM
+Calibration Date Information.InfoDateRsaMagTemp,3/6/2018 8:43 AM
+Calibration Date Information.InfoDateADGain,3/2/2018 1:15 PM
+Calibration Parameters.SPFrtScaleLow,370.8792
+Calibration Parameters.SPFrtScaleMid,3708.792
+Calibration Parameters.SPFrtScaleHi,3708.792
+Calibration Parameters.SPNrmScale,1.549643
+Calibration Parameters.SPXducerMass,555.4000
+Calibration Parameters.SPXducerNormDamping,-0.93000
+Calibration Parameters.SPXducerNormSpringConst,1.500000
+Temperature Control Information.TempCorrInfoTbl01a,FCO/Upper Tool PRT offset
+Temperature Control Information.TempCorrInfoTbl02a,FCO/Lower Tool PRT offset
+Temperature Control Information.TempCorrInfoTbl03a,FCO/Middle PRT offset
+Temperature Control Information.Temperature option,FCO/LN2

@@ -1,6 +1,8 @@
 # Raw data dumps, video recordings, and temporary frame dumps (large instrument exports)
 **/raw/
 raw/
+!data/dma/raw/
+!data/dma/raw/**
 **/untracked/
 **/tests/
 **/archive*/
