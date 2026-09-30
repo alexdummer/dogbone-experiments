@@ -57,11 +57,11 @@ MAT_LABELS = {
 }
 
 QUALIFYING_REPLICATES = {
-    "A0V100": ["A0V100-2", "A0V100-4"],
-    "A25V75": ["A25V75-2", "A25V75-3"],
-    "A50V50": ["A50V50-7", "A50V50-8"],
-    "A75V25": ["A75V25-2", "A75V25-3"],
-    "A100V0": ["A100V0-1", "A100V0-2"],
+    "A0V100": ["A0V100-2", "A0V100-4", "A0V100-5"],
+    "A25V75": ["A25V75-2", "A25V75-3", "A25V75-4"],
+    "A50V50": ["A50V50-7", "A50V50-8", "A50V50-9"],
+    "A75V25": ["A75V25-2", "A75V25-3", "A75V25-4"],
+    "A100V0": ["A100V0-1", "A100V0-2", "A100V0-3"],
 }
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -131,7 +131,8 @@ for mat in MAT_ORDER:
         })
         
         # Plot individual replicate points
-        marker = "o" if s_idx == 0 else "^"
+        markers = ["o", "^", "s", "D", "v"]
+        marker = markers[s_idx % len(markers)]
         ax1.plot(sub["Temperature (°C)"], sub["E_prime_MPa"],
                  marker=marker, markersize=3, linestyle="none", color=color, alpha=0.55, zorder=2)
         ax2.plot(sub["Temperature (°C)"], sub["tan_delta"],
@@ -142,15 +143,13 @@ for mat in MAT_ORDER:
     t_max = min(df["Temperature (°C)"].max() for df in rep_dfs)
     t_grid = np.linspace(t_min, t_max, 150)
     
-    # Envelope from interpolation
-    e1 = np.interp(t_grid, rep_dfs[0]["Temperature (°C)"], rep_dfs[0]["E_prime_MPa"])
-    e2 = np.interp(t_grid, rep_dfs[1]["Temperature (°C)"], rep_dfs[1]["E_prime_MPa"])
-    tan1 = np.interp(t_grid, rep_dfs[0]["Temperature (°C)"], rep_dfs[0]["tan_delta"])
-    tan2 = np.interp(t_grid, rep_dfs[1]["Temperature (°C)"], rep_dfs[1]["tan_delta"])
+    # Envelope across all replicates
+    e_interps = np.array([np.interp(t_grid, df["Temperature (°C)"], df["E_prime_MPa"]) for df in rep_dfs])
+    tan_interps = np.array([np.interp(t_grid, df["Temperature (°C)"], df["tan_delta"]) for df in rep_dfs])
     
     # Shaded replicate envelope
-    ax1.fill_between(t_grid, np.minimum(e1, e2), np.maximum(e1, e2), color=color, alpha=0.2, zorder=1)
-    ax2.fill_between(t_grid, np.minimum(tan1, tan2), np.maximum(tan1, tan2), color=color, alpha=0.2, zorder=1)
+    ax1.fill_between(t_grid, np.min(e_interps, axis=0), np.max(e_interps, axis=0), color=color, alpha=0.2, zorder=1)
+    ax2.fill_between(t_grid, np.min(tan_interps, axis=0), np.max(tan_interps, axis=0), color=color, alpha=0.2, zorder=1)
     
     # Pooled spline
     all_t = np.concatenate([df["Temperature (°C)"].to_numpy() for df in rep_dfs])
@@ -163,7 +162,7 @@ for mat in MAT_ORDER:
     ax1.plot(t_grid, 10 ** spline_log_e, linestyle="-", color=color, linewidth=1.5, label=label, zorder=3)
     ax2.plot(t_grid, spline_tan, linestyle="-", color=color, linewidth=1.5, label=label, zorder=3)
     
-    # Aggregate metrics across the two replicates
+    # Aggregate metrics across the replicates
     tg_mean = np.mean([m["Tg"] for m in per_rep_metrics])
     tg_std = np.std([m["Tg"] for m in per_rep_metrics])
     tan_mean = np.mean([m["tan_max"] for m in per_rep_metrics])
@@ -184,8 +183,7 @@ for mat in MAT_ORDER:
         "Eg_std": eg_std,
         "Er_mean": er_mean,
         "Er_std": er_std,
-        "rep1": per_rep_metrics[0],
-        "rep2": per_rep_metrics[1],
+        "reps": per_rep_metrics,
     })
 
 ax1.set_yscale("log")
@@ -217,6 +215,7 @@ custom_lines = [
     plt.Line2D([0], [0], color="black", linestyle="-", linewidth=1.5, label="Smooth spline fit"),
     plt.Line2D([0], [0], color="gray", marker="o", linestyle="none", markersize=3.5, label="Replicate 1"),
     plt.Line2D([0], [0], color="gray", marker="^", linestyle="none", markersize=3.5, label="Replicate 2"),
+    plt.Line2D([0], [0], color="gray", marker="s", linestyle="none", markersize=3.5, label="Replicate 3"),
 ]
 ax2.legend(handles=custom_lines, loc="upper right", fontsize=7.5)
 
@@ -229,7 +228,7 @@ plt.close(fig)
 
 
 # -------------------------------------------------------------
-# 2. TTS Master Curves (both replicates + pooled GCV spline)
+# 2. TTS Master Curves (replicates + pooled GCV spline)
 # -------------------------------------------------------------
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18 / 2.54, 7.5 / 2.54))
 
@@ -246,16 +245,18 @@ for mat in MAT_ORDER:
     for df in master_dfs:
         df["E_prime_MPa"] = df["storage_modulus_kPa"] / 1000.0
         
-    # Grid spanning overlap of both replicates
+    # Grid spanning overlap of all replicates
     log_min = max(np.log10(df["reduced_freq_hz"].min()) for df in master_dfs)
     log_max = min(np.log10(df["reduced_freq_hz"].max()) for df in master_dfs)
     log_grid = np.linspace(log_min, log_max, 250)
     
     # Envelope from interpolation
-    e1_grid = np.interp(log_grid, np.log10(master_dfs[0]["reduced_freq_hz"]), np.log10(master_dfs[0]["E_prime_MPa"]))
-    e2_grid = np.interp(log_grid, np.log10(master_dfs[1]["reduced_freq_hz"]), np.log10(master_dfs[1]["E_prime_MPa"]))
+    e_grids = np.array([
+        np.interp(log_grid, np.log10(df["reduced_freq_hz"]), np.log10(df["E_prime_MPa"]))
+        for df in master_dfs
+    ])
     
-    ax1.fill_between(10 ** log_grid, 10 ** np.minimum(e1_grid, e2_grid), 10 ** np.maximum(e1_grid, e2_grid),
+    ax1.fill_between(10 ** log_grid, 10 ** np.min(e_grids, axis=0), 10 ** np.max(e_grids, axis=0),
                      color=color, alpha=0.25, zorder=1)
                      
     # Pooled GCV smoothing spline
@@ -266,13 +267,15 @@ for mat in MAT_ORDER:
     ax1.plot(10 ** log_grid, 10 ** spline_y, linestyle="-", color=color, linewidth=1.5, label=label, zorder=3)
     
     # Also plot thin dashed individual replicate curves to show agreement
-    ax1.plot(master_dfs[0]["reduced_freq_hz"], master_dfs[0]["E_prime_MPa"],
-             linestyle=":", color=color, linewidth=0.8, alpha=0.6, zorder=2)
-    ax1.plot(master_dfs[1]["reduced_freq_hz"], master_dfs[1]["E_prime_MPa"],
-             linestyle="--", color=color, linewidth=0.8, alpha=0.6, zorder=2)
+    rep_linestyles = [":", "--", "-."]
+    for s_idx, df in enumerate(master_dfs):
+        ls = rep_linestyles[s_idx % len(rep_linestyles)]
+        ax1.plot(df["reduced_freq_hz"], df["E_prime_MPa"],
+                 linestyle=ls, color=color, linewidth=0.8, alpha=0.6, zorder=2)
 
-    # Plot Shift Factors for both replicates
+    # Plot Shift Factors for all replicates
     shift_dfs = []
+    markers = ["o", "^", "s", "D", "v"]
     for s_idx, s in enumerate(samples):
         sf_p = proc / f"{s}__shift_factors.csv"
         if sf_p.exists():
@@ -280,11 +283,11 @@ for mat in MAT_ORDER:
             if "isolated_low_confidence" in sdf.columns:
                 sdf = sdf[sdf["isolated_low_confidence"] == False]
             shift_dfs.append(sdf)
-            marker = "o" if s_idx == 0 else "^"
+            marker = markers[s_idx % len(markers)]
             ax2.plot(sdf["temperature_C"], sdf["log_aT"],
                      marker=marker, markersize=3, linestyle="none", color=color, alpha=0.7, zorder=3)
                      
-    # Combined WLF fit through both replicates
+    # Combined WLF fit through all replicates
     if shift_dfs:
         comb_shifts = pd.concat(shift_dfs, ignore_index=True).sort_values("temperature_C")
         sub_fit = comb_shifts[(comb_shifts["temperature_C"] >= 20) & (comb_shifts["temperature_C"] <= 90)].copy()
@@ -319,6 +322,7 @@ custom_lines_tts = [
     plt.Line2D([0], [0], color="black", linestyle="-", linewidth=1.5, label="WLF fit (combined)"),
     plt.Line2D([0], [0], color="gray", marker="o", linestyle="none", markersize=3.5, label="Replicate 1"),
     plt.Line2D([0], [0], color="gray", marker="^", linestyle="none", markersize=3.5, label="Replicate 2"),
+    plt.Line2D([0], [0], color="gray", marker="s", linestyle="none", markersize=3.5, label="Replicate 3"),
 ]
 ax2.legend(handles=custom_lines_tts, loc="upper right", fontsize=7.5)
 
@@ -336,11 +340,11 @@ plt.close(fig)
 summary_table_path = BASE_DIR / "paper" / "dma_summary_table.tex"
 
 table_tex = [
-    "% Auto-generated DMA summary table showing both replicates and mean values",
+    "% Auto-generated DMA summary table showing all replicates and mean values",
     "\\begin{table}[htpb!]",
     "    \\centering",
     "    \\small",
-    "    \\caption{Dynamic mechanical analysis (DMA) properties at \\SI{1}{\\hertz} across the two experimental replicates ($n=2$) and their mean for each digital composite blend. Reference temperature for TTS is $T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$.}",
+    "    \\caption{Dynamic mechanical analysis (DMA) properties at \\SI{1}{\\hertz} across three experimental replicates ($n=3$) and their mean for each digital composite blend. Reference temperature for TTS is $T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$.}",
     "    \\label{tab:dma-summary}",
     "    \\begin{tabular}{lcccccc}",
     "        \\toprule",
@@ -352,16 +356,18 @@ table_tex = [
 for row in summary_table_data:
     mat = row["Material"]
     vw = row["VW_pct"]
-    r1 = row["rep1"]
-    r2 = row["rep2"]
+    reps = row["reps"]
+    n_reps = len(reps)
     
-    table_tex.append(
-        f"        \\multirow{{3}}{{*}}{{{mat}}} & \\multirow{{3}}{{*}}{{{vw}}} & {r1['sample']} & {r1['Tg']:.1f} & {r1['tan_max']:.2f} & {r1['Eg']:.1f} & {r1['Er']:.2f} \\\\"
-    )
-    # Replicate 2
-    table_tex.append(
-        f"         &  & {r2['sample']} & {r2['Tg']:.1f} & {r2['tan_max']:.2f} & {r2['Eg']:.1f} & {r2['Er']:.2f} \\\\"
-    )
+    for idx, r in enumerate(reps):
+        if idx == 0:
+            table_tex.append(
+                f"        \\multirow{{{n_reps + 1}}}{{*}}{{{mat}}} & \\multirow{{{n_reps + 1}}}{{*}}{{{vw}}} & {r['sample']} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
+            )
+        else:
+            table_tex.append(
+                f"         &  & {r['sample']} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
+            )
     # Mean
     table_tex.append(
         f"         &  & \\textbf{{Mean}} & \\textbf{{{row['Tg_mean']:.1f}}} & \\textbf{{{row['tan_mean']:.2f}}} & \\textbf{{{row['Eg_mean']:.1f}}} & \\textbf{{{row['Er_mean']:.2f}}} \\\\"

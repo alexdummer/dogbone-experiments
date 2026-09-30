@@ -43,11 +43,11 @@ OUTPUT_DIR = REPO_ROOT / "analysis"
 PARAMS_DIR = REPO_ROOT / "simulations" / "material-calibration" / "parameters"
 
 QUALIFYING_DMA_SAMPLES = {
-    "A0V100": "A0V100-2",
-    "A25V75": "A25V75-2",
-    "A50V50": "A50V50-7",
-    "A75V25": "A75V25-2",
-    "A100V0": "A100V0-1",
+    "A0V100": ["A0V100-2", "A0V100-4", "A0V100-5"],
+    "A25V75": ["A25V75-2", "A25V75-3", "A25V75-4"],
+    "A50V50": ["A50V50-7", "A50V50-8", "A50V50-9"],
+    "A75V25": ["A75V25-2", "A75V25-3", "A75V25-4"],
+    "A100V0": ["A100V0-1", "A100V0-2", "A100V0-3"],
 }
 
 
@@ -103,19 +103,31 @@ def fit_dma_prony(mat, n_terms=6):
     """
     Fit an N-term discrete Prony series to the DMA storage modulus master curve:
       E'(omega) = E_inf + sum_{i=1}^N E_i * (omega * tau_i)^2 / (1 + (omega * tau_i)^2)
-    using adaptive logarithmic windowing over the observation domain.
+    using adaptive logarithmic windowing over the observation domain across qualifying replicates.
     """
-    sample = QUALIFYING_DMA_SAMPLES[mat]
-    csv_path = DMA_RAW_DIR / mat / "processed" / f"{sample}__direct_wlf_master_curve.csv"
-    if not csv_path.exists():
+    samples = QUALIFYING_DMA_SAMPLES[mat]
+    if isinstance(samples, str):
+        samples = [samples]
+
+    dfs = []
+    for sample in samples:
+        csv_path = DMA_RAW_DIR / mat / "processed" / f"{sample}__direct_wlf_master_curve.csv"
+        if csv_path.exists():
+            d = pd.read_csv(csv_path)
+            d = d[d["storage_modulus_kPa"] > 0].copy()
+            d["E_prime_MPa"] = d["storage_modulus_kPa"] / 1000.0
+            dfs.append(d)
+
+    if not dfs:
         candidates = list((DMA_RAW_DIR / mat / "processed").glob("*__direct_wlf_master_curve.csv"))
         if not candidates:
             raise FileNotFoundError(f"No DMA master curve found for {mat}")
-        csv_path = candidates[0]
+        d = pd.read_csv(candidates[0])
+        d = d[d["storage_modulus_kPa"] > 0].copy()
+        d["E_prime_MPa"] = d["storage_modulus_kPa"] / 1000.0
+        dfs.append(d)
 
-    df = pd.read_csv(csv_path)
-    df = df[df["storage_modulus_kPa"] > 0].copy()
-    df["E_prime_MPa"] = df["storage_modulus_kPa"] / 1000.0
+    df = pd.concat(dfs, ignore_index=True)
 
     # Window covering relevant room-temperature frequency range
     f_min = max(df["reduced_freq_hz"].min(), 1e-5)
@@ -124,6 +136,7 @@ def fit_dma_prony(mat, n_terms=6):
     if len(sub) < 3 * n_terms:
         sub = df.iloc[:min(len(df), 50)].copy()
 
+    sub = sub.sort_values("reduced_freq_hz")
     freq = sub["reduced_freq_hz"].to_numpy()
     omega = 2 * np.pi * freq
     E_prime = sub["E_prime_MPa"].to_numpy()
