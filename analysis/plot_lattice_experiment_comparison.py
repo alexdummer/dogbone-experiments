@@ -54,6 +54,19 @@ def load_fe(material, suffix):
     return t, disp, force
 
 
+PAPER_FIGS = Path(__file__).resolve().parents[2] / "paper" / "figures"
+
+
+def load_replicates(material):
+    reps = []
+    for r in (1, 2, 3):
+        path = EXP_BASE / f"{material}-{r}_cleaned.csv"
+        if path.exists():
+            df = pd.read_csv(path)
+            reps.append((df["time_s"].to_numpy(), df["position_mm"].to_numpy(), -df["force_N"].to_numpy()))
+    return reps
+
+
 def load_experiment(material):
     path = EXP_BASE / f"{material}_cleaned.csv"
     if not path.exists():
@@ -69,6 +82,8 @@ def save(fig, name):
     for ext in ("pdf", "png"):
         out_path = OUT_BASE / f"{name}.{ext}"
         fig.savefig(out_path, dpi=300, bbox_inches="tight")
+        if PAPER_FIGS.exists():
+            fig.savefig(PAPER_FIGS / f"{name}.{ext}", dpi=300, bbox_inches="tight")
         print(f"saved {out_path}")
 
 
@@ -78,14 +93,21 @@ def grid_plot(xkey, xlabel, out_name):
     fig, axes = plt.subplots(1, n, figsize=figsize_double, sharey=False)
     model_handles = []
     for i, (ax, material) in enumerate(zip(axes, MATERIALS)):
+        # Plot individual replicates as light dashed lines
+        reps = load_replicates(material)
+        for r_idx, (t_r, disp_r, force_r) in enumerate(reps):
+            x_r = t_r if xkey == "t" else disp_r
+            ax.plot(x_r, force_r, color="0.75", linestyle=":", linewidth=0.7, zorder=1)
+
+        # Plot mean experimental curve
         exp = load_experiment(material)
         if exp is not None:
             t, disp, force = exp
             x = t if xkey == "t" else disp
-            line, = ax.plot(x, force, color="0.5", linestyle="-", linewidth=1.0,
-                             zorder=1)
+            line, = ax.plot(x, force, color="0.25", linestyle="-", linewidth=1.1,
+                             zorder=2)
             if i == 0:
-                model_handles.append((line, "Experiment"))
+                model_handles.append((line, "Experiment (mean)"))
         for suffix, model_label, ls, marker in MODELS:
             result = load_fe(material, suffix)
             if result is None:
@@ -93,7 +115,7 @@ def grid_plot(xkey, xlabel, out_name):
             t, disp, force = result
             x = t if xkey == "t" else disp
             line, = ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.3,
-                             marker=marker, markersize=2.2, markevery=2, zorder=2)
+                             marker=marker, markersize=2.2, markevery=2, zorder=3)
             if i == 0:
                 model_handles.append((line, model_label))
         ax.set_title(material, fontsize=9)
@@ -101,16 +123,18 @@ def grid_plot(xkey, xlabel, out_name):
             ax.set_ylabel("Axial force in N")
         if i == center:
             ax.set_xlabel(xlabel)
-    legend_entries = [("0.5", "-", None, "Experiment")] + [
+    legend_entries = [("0.75", ":", None, "Replicate (n=3)"),
+                      ("0.25", "-", None, "Experiment (mean)")] + [
         ("black", ls, marker, label) for _, label, ls, marker in MODELS
     ]
     handles = [plt.Line2D([], [], color=c, linestyle=ls, marker=marker, markersize=4)
                for c, ls, marker, _ in legend_entries]
     labels = [label for _, _, _, label in legend_entries]
-    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.08),
+    fig.legend(handles, labels, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.08),
                frameon=False)
     fig.tight_layout()
     save(fig, out_name)
+
 
 
 grid_plot("t", "Time in s", "lattice_experiment_comparison_force_time")

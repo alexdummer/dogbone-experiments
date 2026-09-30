@@ -67,16 +67,33 @@ def save(fig, name):
         print(f"saved {out_path}")
 
 
+def load_replicates(material):
+    reps = []
+    for r in (1, 2, 3):
+        path = EXP_BASE / f"{material}-{r}_cleaned.csv"
+        if path.exists():
+            df = pd.read_csv(path)
+            reps.append((df["time_s"].to_numpy(), df["position_mm"].to_numpy(), -df["force_N"].to_numpy()))
+    return reps
+
+
 def plot_single(xkey, xlabel, out_name):
     fig, ax = plt.subplots(figsize=figsize_single)
 
-    # Experimental curve
+    # Replicate curves
+    reps = load_replicates(MATERIAL)
+    for r_idx, (t_r, disp_r, force_r) in enumerate(reps):
+        x_r = t_r if xkey == "t" else disp_r
+        ax.plot(x_r, force_r, color="0.75", linestyle=":", linewidth=0.8,
+                label="Replicate (n=3)" if r_idx == 0 else None, zorder=1)
+
+    # Experimental mean curve
     exp = load_experiment(MATERIAL)
     if exp is not None:
         t, disp, force = exp
         x = t if xkey == "t" else disp
         ax.plot(x, force, color="0.2", linestyle="-", linewidth=1.4,
-                label="Experiment", zorder=1)
+                label="Exp (mean)", zorder=2)
 
     # FE model curves
     for suffix, model_label, color, ls, marker in MODELS:
@@ -86,7 +103,7 @@ def plot_single(xkey, xlabel, out_name):
         t, disp, force = result
         x = t if xkey == "t" else disp
         ax.plot(x, force, color=color, linestyle=ls, linewidth=1.3,
-                marker=marker, markersize=2.5, markevery=2, label=model_label, zorder=2)
+                marker=marker, markersize=2.5, markevery=2, label=model_label, zorder=3)
 
     ax.set_title(MATERIAL, fontsize=9)
     ax.set_xlabel(xlabel)
@@ -105,17 +122,20 @@ def plot_combined():
 
     exp = load_experiment(MATERIAL)
     t_exp, disp_exp, force_exp = exp if exp is not None else (None, None, None)
+    reps = load_replicates(MATERIAL)
 
     # Top panel: Force vs. Time
+    for r_idx, (t_r, disp_r, force_r) in enumerate(reps):
+        ax_time.plot(t_r, force_r, color="0.75", linestyle=":", linewidth=0.8, zorder=1)
     if exp is not None:
         ax_time.plot(t_exp, force_exp, color="0.2", linestyle="-", linewidth=1.4,
-                     label="Experiment", zorder=1)
+                     label="Exp (mean)", zorder=2)
     for suffix, model_label, color, ls, marker in MODELS:
         result = load_fe(MATERIAL, suffix)
         if result is not None:
             t, disp, force = result
             ax_time.plot(t, force, color=color, linestyle=ls, linewidth=1.3,
-                         marker=marker, markersize=2.5, markevery=2, label=model_label, zorder=2)
+                         marker=marker, markersize=2.5, markevery=2, label=model_label, zorder=3)
 
     ax_time.set_title(MATERIAL, fontsize=9)
     ax_time.set_xlabel("Time in s")
@@ -124,15 +144,17 @@ def plot_combined():
     ax_time.legend(frameon=False, fontsize=8)
 
     # Bottom panel: Force vs. Displacement
+    for r_idx, (t_r, disp_r, force_r) in enumerate(reps):
+        ax_disp.plot(disp_r, force_r, color="0.75", linestyle=":", linewidth=0.8, zorder=1)
     if exp is not None:
         ax_disp.plot(disp_exp, force_exp, color="0.2", linestyle="-", linewidth=1.4,
-                     label="Experiment", zorder=1)
+                     label="Exp (mean)", zorder=2)
     for suffix, model_label, color, ls, marker in MODELS:
         result = load_fe(MATERIAL, suffix)
         if result is not None:
             t, disp, force = result
             ax_disp.plot(disp, force, color=color, linestyle=ls, linewidth=1.3,
-                         marker=marker, markersize=2.5, markevery=2, label=model_label, zorder=2)
+                         marker=marker, markersize=2.5, markevery=2, label=model_label, zorder=3)
 
     ax_disp.set_xlabel("Grip displacement in mm")
     ax_disp.set_ylabel("Axial force in N")
