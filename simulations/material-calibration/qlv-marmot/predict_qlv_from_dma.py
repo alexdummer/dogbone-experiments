@@ -198,6 +198,7 @@ def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="fast"):
     """
     Fit Mooney-Rivlin parameters (C1, C2) on the ramp phase of a single rate group,
     keeping DMA-derived (gammas, taus) fixed.
+    Uses constant mean strain rate over the loading ramp.
     """
     cfg = MATERIALS[mat]
     test_id = cfg["rate_groups"][cal_rate_group][0]
@@ -208,7 +209,10 @@ def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="fast"):
     ramp_mask = t_ds <= t_ramp_end
 
     t_ramp = t_ds[ramp_mask]
-    stretch_ramp = 1.0 + strain_ds[ramp_mask]
+    peak_strain = df["strain"].iloc[ramp_end]
+    mean_strain_rate = peak_strain / t_ramp_end
+    strain_sim_ramp = mean_strain_rate * t_ramp
+    stretch_ramp = 1.0 + strain_sim_ramp
     stress_ramp = stress_ds[ramp_mask]
 
     peak_stress = stress_ramp.max()
@@ -223,7 +227,7 @@ def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="fast"):
 
     G_est = peak_stress / max(stretch_ramp.max() - 1.0, 1e-4) / 3.0
     x0 = [max(G_est / 2.0, 1.0), max(G_est / 4.0, 0.1)]
-    lb = [1e-3, -1e3]
+    lb = [1e-3, 0.0]
     ub = [1e4, 1e4]
 
     res = least_squares(ramp_residuals, x0, bounds=(lb, ub), method="trf", xtol=1e-6, ftol=1e-6)
@@ -234,6 +238,7 @@ def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="fast"):
 def simulate_all_rates(mat, C1, C2, gammas, taus):
     """
     Simulate all rate groups across both ramp and hold using the calibrated parameters.
+    Uses constant mean strain rate during loading ramp and holds peak strain constant during hold.
     """
     cfg = MATERIALS[mat]
     results = {}
@@ -241,12 +246,18 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
         test_id = ids[0]
         df = load(cfg, mat, test_id)
         t_ds, strain_ds, stress_ds = downsample_for_fit(df, n_ramp=40, n_hold=60)
-        stretch_ds = 1.0 + strain_ds
         _, ramp_end = find_ramp_bounds(df["position_mm"])
         t_ramp_end = df["time_s"].iloc[ramp_end]
         is_ramp = t_ds <= t_ramp_end
 
-        pred = simulate_once(t_ds, stretch_ds, "MooneyRivlin", C1, C2, 0.0, gammas, taus)
+        peak_strain = df["strain"].iloc[ramp_end]
+        mean_strain_rate = peak_strain / t_ramp_end
+
+        # Idealized strain: linear ramp with mean strain rate, constant peak strain in hold
+        strain_sim = np.where(is_ramp, mean_strain_rate * t_ds, peak_strain)
+        stretch_sim = 1.0 + strain_sim
+
+        pred = simulate_once(t_ds, stretch_sim, "MooneyRivlin", C1, C2, 0.0, gammas, taus)
 
         rmse_total = np.sqrt(np.mean((pred - stress_ds) ** 2))
         rmse_pct = 100.0 * rmse_total / stress_ds.max()
@@ -257,11 +268,9 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
         rmse_hold = np.sqrt(np.mean((pred[~is_ramp] - stress_ds[~is_ramp]) ** 2))
         rmse_hold_pct = 100.0 * rmse_hold / stress_ds.max()
 
-        # Generate smooth ramp simulation on clean linear strain for clean plotting
+        # Dense smooth ramp simulation on clean linear strain for clean plotting in stress-strain panel
         t_ramp_clean = np.linspace(0, t_ramp_end, 50)
-        # Use average strain rate over ramp
-        ramp_strain_peak = strain_ds[is_ramp].max()
-        strain_clean = np.linspace(0, ramp_strain_peak, 50)
+        strain_clean = np.linspace(0, peak_strain, 50)
         stretch_clean = 1.0 + strain_clean
         pred_clean = simulate_once(t_ramp_clean, stretch_clean, "MooneyRivlin", C1, C2, 0.0, gammas, taus)
 
@@ -269,7 +278,8 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
             "test_id": test_id,
             "t": t_ds,
             "strain": strain_ds,
-            "stretch": stretch_ds,
+            "stretch": stretch_sim,
+            "strain_sim": strain_sim,
             "stress_exp": stress_ds,
             "stress_pred": pred,
             "is_ramp": is_ramp,
