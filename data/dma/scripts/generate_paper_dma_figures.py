@@ -243,7 +243,7 @@ plt.close(fig)
 # -------------------------------------------------------------
 # 2. TTS Master Curves (replicates + pooled GCV spline)
 # -------------------------------------------------------------
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18 / 2.54, 7.5 / 2.54))
+fig, ax1 = plt.subplots(figsize=(11 / 2.54, 7.5 / 2.54))
 
 for mat in MAT_ORDER:
     color = MAT_COLORS[mat]
@@ -286,58 +286,13 @@ for mat in MAT_ORDER:
         ax1.plot(df["reduced_freq_hz"], df["E_prime_MPa"],
                  linestyle=ls, color=color, linewidth=0.8, alpha=0.6, zorder=2)
 
-    # Plot Shift Factors for all replicates
-    shift_dfs = []
-    markers = ["o", "^", "s", "D", "v"]
-    for s_idx, s in enumerate(samples):
-        sf_p = proc / f"{s}__shift_factors.csv"
-        if sf_p.exists():
-            sdf = pd.read_csv(sf_p).sort_values("temperature_C")
-            if "isolated_low_confidence" in sdf.columns:
-                sdf = sdf[sdf["isolated_low_confidence"] == False]
-            shift_dfs.append(sdf)
-            marker = markers[s_idx % len(markers)]
-            ax2.plot(sdf["temperature_C"], sdf["log_aT"],
-                     marker=marker, markersize=3, linestyle="none", color=color, alpha=0.7, zorder=3)
-                     
-    # Combined WLF fit through all replicates
-    if shift_dfs:
-        comb_shifts = pd.concat(shift_dfs, ignore_index=True).sort_values("temperature_C")
-        sub_fit = comb_shifts[(comb_shifts["temperature_C"] >= 20) & (comb_shifts["temperature_C"] <= 90)].copy()
-        if len(sub_fit) >= 4:
-            try:
-                def wlf(T, c1, c2):
-                    return -c1 * (T - 20.0) / (c2 + (T - 20.0))
-                popt, _ = curve_fit(wlf, sub_fit["temperature_C"], sub_fit["log_aT"], p0=[15.0, 50.0], maxfev=5000)
-                t_fit = np.linspace(20, comb_shifts["temperature_C"].max(), 100)
-                ax2.plot(t_fit, wlf(t_fit, *popt), linestyle="-", color=color, linewidth=1.2, zorder=2)
-            except Exception:
-                pass
-
 ax1.set_xscale("log")
 ax1.set_yscale("log")
-ax1.set_xlabel("Reduced frequency $f_r$ (Hz) at $T_{\\mathrm{ref}} = 20^\\circ$C")
-ax1.set_ylabel("Storage modulus $E'$ (MPa)")
+ax1.set_xlabel(r"Reduced frequency $f_r$ (Hz) at $T_{\mathrm{ref}} = 20^\circ$C")
+ax1.set_ylabel(r"Storage modulus $E'$ (MPa)")
 ax1.set_xlim(1e-12, 1e15)
 ax1.set_ylim(0.5, 4500)
-ax1.text(0.04, 0.06, "(a)", transform=ax1.transAxes, fontsize=11, fontweight="bold")
-ax1.legend(loc="lower left", fontsize=7.5)
-
-ax2.set_xlabel("Temperature $T$ ($^\\circ$C)")
-ax2.set_ylabel("Shift factor $\\log_{10}(a_T)$ (--)")
-ax2.text(0.04, 0.06, "(b)", transform=ax2.transAxes, fontsize=11, fontweight="bold")
-ax2.set_xlim(-25, 115)
-ax2.axhline(0, color="gray", linestyle=":", linewidth=0.8, alpha=0.7)
-ax2.axvline(20, color="gray", linestyle=":", linewidth=0.8, alpha=0.7)
-
-# Legend on ax2 for replicate symbols
-custom_lines_tts = [
-    plt.Line2D([0], [0], color="black", linestyle="-", linewidth=1.5, label="WLF fit (combined)"),
-    plt.Line2D([0], [0], color="gray", marker="o", linestyle="none", markersize=3.5, label="Replicate 1"),
-    plt.Line2D([0], [0], color="gray", marker="^", linestyle="none", markersize=3.5, label="Replicate 2"),
-    plt.Line2D([0], [0], color="gray", marker="s", linestyle="none", markersize=3.5, label="Replicate 3"),
-]
-ax2.legend(handles=custom_lines_tts, loc="upper right", fontsize=7.5)
+ax1.legend(loc="upper left", fontsize=7.5)
 
 sns.despine(fig=fig)
 fig.tight_layout()
