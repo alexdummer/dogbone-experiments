@@ -48,12 +48,19 @@ MAT_COLORS = {
 }
 
 MAT_ORDER = ["A0V100", "A25V75", "A50V50", "A75V25", "A100V0"]
+DISPLAY_NAMES = {
+    "A0V100": "A0",
+    "A25V75": "A25",
+    "A50V50": "A50",
+    "A75V25": "A75",
+    "A100V0": "A100",
+}
 MAT_LABELS = {
-    "A0V100": "A0V100 (0\\% AB)",
-    "A25V75": "A25V75 (25\\% AB)",
-    "A50V50": "A50V50 (50\\% AB)",
-    "A75V25": "A75V25 (75\\% AB)",
-    "A100V0": "A100V0 (100\\% AB)",
+    "A0V100": "A0 (0\\% Agilus)",
+    "A25V75": "A25 (25\\% Agilus)",
+    "A50V50": "A50 (50\\% Agilus)",
+    "A75V25": "A75 (75\\% Agilus)",
+    "A100V0": "A100 (100\\% Agilus)",
 }
 
 QUALIFYING_REPLICATES = {
@@ -354,31 +361,34 @@ table_tex = [
     "    \\label{tab:dma-summary}",
     "    \\begin{tabular}{lcccccc}",
     "        \\toprule",
-    "        Blend & Vero Vol.\\ & Replicate & $T_g$ & $(\\tan\\delta)_{\\mathrm{max}}$ & $E'_g$ (Glassy) & $E'_r$ (Rubbery) \\\\",
+    "        Blend & Agilus Vol.\\ & Replicate & $T_g$ & $(\\tan\\delta)_{\\mathrm{max}}$ & $E'_g$ (Glassy) & $E'_r$ (Rubbery) \\\\",
     "         & (\\%) & ID & (\\si{\\celsius}) & (--) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) \\\\",
     "        \\midrule",
 ]
 
 for row in summary_table_data:
-    mat = row["Material"]
-    vw = row["VW_pct"]
+    mat = DISPLAY_NAMES.get(row["Material"], row["Material"])
+    agilus_pct = 100 - row["VW_pct"]
     reps = row["reps"]
     n_reps = len(reps)
     
     for idx, r in enumerate(reps):
+        sample_name = r['sample']
+        for k, v in DISPLAY_NAMES.items():
+            sample_name = sample_name.replace(k, v)
         if idx == 0:
             table_tex.append(
-                f"        \\multirow{{{n_reps + 1}}}{{*}}{{{mat}}} & \\multirow{{{n_reps + 1}}}{{*}}{{{vw}}} & {r['sample']} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
+                f"        \\multirow{{{n_reps + 1}}}{{*}}{{{mat}}} & \\multirow{{{n_reps + 1}}}{{*}}{{{agilus_pct}}} & {sample_name} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
             )
         else:
             table_tex.append(
-                f"         &  & {r['sample']} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
+                f"         &  & {sample_name} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
             )
     # Mean
     table_tex.append(
         f"         &  & \\textbf{{Mean}} & \\textbf{{{row['Tg_mean']:.1f}}} & \\textbf{{{row['tan_mean']:.2f}}} & \\textbf{{{row['Eg_mean']:.1f}}} & \\textbf{{{row['Er_mean']:.2f}}} \\\\"
     )
-    if mat != MAT_ORDER[-1]:
+    if row["Material"] != MAT_ORDER[-1]:
         table_tex.append("        \\midrule")
 
 table_tex.extend([

@@ -97,7 +97,7 @@ def _solve_quiet(solver):
 
 
 def build_props(base_name, A, B, c1, c2, c3):
-    """Assemble the 13-slot BergstromBoyce material property array for the
+    """Assemble the 12-slot BergstromBoyce material property array for the
     given hyperelastic base ("NeoHooke"/"Yeoh"/"MooneyRivlin"/"ArrudaBoyce"),
     network coefficient tuples A=(A1,A2,A3) and B=(B1,B2,B3), and flow-law
     params. For ArrudaBoyce, A1/B1 = mu, A2/B2 = lambdaL (A3/B3 unused),
@@ -110,7 +110,7 @@ def build_props(base_name, A, B, c1, c2, c3):
     B1, B2, B3 = B
     kappaA = kappaB = 100.0 * A1
     return np.array(
-        [base_id, kappaA, kappaB, A1, A2, A3, B1, B2, B3, c1, c2, c3, 0.0],
+        [base_id, kappaA, kappaB, A1, A2, A3, B1, B2, B3, c1, c2, c3],
         dtype=np.float64,
     )
 

@@ -295,14 +295,17 @@ def main():
     ax_relax.legend(fontsize=8)
     ax_relax.grid(True, alpha=0.4)
 
+    DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
+
     for material, cfg in MATERIALS.items():
         color = colors[material_order.index(material) + 3]
         slow_ids = cfg["rate_groups"]["slow"]
+        disp_name = DISPLAY_NAMES.get(material, material)
         for test_id in slow_ids:
             t, norm = curves[(material, "slow", test_id)]
             mask = t > 0
             ax_curves.plot(t[mask], norm[mask], color=color, linewidth=0.7,
-                            label=material if test_id == slow_ids[0] else None)
+                            label=disp_name if test_id == slow_ids[0] else None)
     ax_curves.set_xscale("log")
     ax_curves.set_xlabel("Time since peak stress in s")
     ax_curves.set_ylabel("Normalized stress (stress / peak stress)")
@@ -321,11 +324,12 @@ def main():
     for material, cfg in MATERIALS.items():
         color = colors[material_order.index(material) + 3]
         fast_ids = cfg["rate_groups"]["fast"]
+        disp_name = DISPLAY_NAMES.get(material, material)
         for test_id in fast_ids:
             t, norm = curves[(material, "fast", test_id)]
             mask = t > 0
             ax_curves_fast.plot(t[mask], norm[mask], color=color, linewidth=0.7,
-                                 label=material if test_id == fast_ids[0] else None)
+                                 label=disp_name if test_id == fast_ids[0] else None)
     ax_curves_fast.set_xscale("log")
     ax_curves_fast.set_xlabel("Time since peak stress in s")
     ax_curves_fast.set_ylabel("Normalized stress (stress / peak stress)")
@@ -349,6 +353,7 @@ def main():
                                 sharey=True)
     for ax, (material, cfg) in zip(axes3, MATERIALS.items()):
         color = colors[material_order.index(material) + 3]
+        disp_name = DISPLAY_NAMES.get(material, material)
         for rate_group in ["slow", "fast"]:
             ids = cfg["rate_groups"][rate_group]
             _, ls = RATE_GROUP_STYLE[rate_group]
@@ -359,7 +364,7 @@ def main():
                         label=f"{rate_group} rate" if test_id == ids[0] else None)
         ax.set_xscale("log")
         ax.set_xlabel("Time since peak stress in s")
-        ax.set_title(material, fontsize=9)
+        ax.set_title(disp_name, fontsize=9)
         ax.legend(fontsize=7)
         ax.grid(True, alpha=0.4)
     axes3[0].set_ylabel("Normalized stress (stress / peak stress)")
@@ -376,13 +381,14 @@ def main():
                                 sharey=False)
     for ax, (material, cfg) in zip(axes4, MATERIALS.items()):
         s = summary[summary["material"] == material].sort_values("strain_rate_per_s")
+        disp_name = DISPLAY_NAMES.get(material, material)
 
         if not cfg.get("reliable_secant_modulus", True):
             ax.text(0.5, 0.5, "secant modulus unreliable\nat this strain for this\nmaterial (video-frame\nresolution limit)",
                     ha="center", va="center", fontsize=7, color="grey", style="italic", transform=ax.transAxes)
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_title(f"{material} (n={len(s)} rate points)", fontsize=9)
+            ax.set_title(f"{disp_name} (n={len(s)} rate points)", fontsize=9)
             continue
 
         ax.errorbar(s["strain_rate_per_s"], s["secant_modulus_mean"], yerr=s["secant_modulus_std"],
@@ -401,7 +407,7 @@ def main():
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(r"Mean stretching rate $\dot{\varepsilon}$ (1/s)")
-        ax.set_title(f"{material} (n={len(s)} rate points)", fontsize=9)
+        ax.set_title(f"{disp_name} (n={len(s)} rate points)", fontsize=9)
         ax.legend(fontsize=7)
         ax.grid(True, alpha=0.4)
     axes4[0].set_ylabel("Secant modulus at 0.2\\% strain (MPa)")

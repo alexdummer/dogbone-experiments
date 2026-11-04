@@ -14,12 +14,12 @@ Each material uses:
 Jobs are written to {material}_bb/ subdirectories (distinct from
 generate_jobs.py's {material}/) so the two models' outputs never collide.
 
-BergstromBoyce's property vector (13 slots, from Marmot's
+BergstromBoyce's property vector (12 slots, from Marmot's
 BergstromBoyce.h/.cpp and the Python bindings in fit_bb_model.py -- there is
 no onlyShearCreep flag and no Maxwell/Prony branch count for this material,
 unlike CompressibleFiniteStrainLinearViscoelasticity):
   hyperelasticBase(3=ArrudaBoyce), kappaA, kappaB, A1, A2, A3, B1, B2, B3,
-  c1, c2, c3, implementationType(0=CSDA, the only implemented option)
+  c1, c2, c3
 """
 import csv
 import sys
@@ -104,8 +104,8 @@ def render_job(material, params_row, t_ramp, u_final, t_hold, test_id, mesh_incl
 {ARRUDA_BOYCE_BASE_ID}, {kappaA:.10g}, {kappaB:.10g},
 ** A1, A2, A3, B1, B2, B3
 {A1:.10g}, {A2:.10g}, {A3:.10g}, {B1:.10g}, {B2:.10g}, {B3:.10g},
-** c1, c2, c3, implementationType(0=CSDA)
-{c1:.10g}, {c2:.10g}, {c3:.10g}, 0
+** c1, c2, c3
+{c1:.10g}, {c2:.10g}, {c3:.10g}
 
 *section, name=section1, material=bb{material}, type=solid
 all

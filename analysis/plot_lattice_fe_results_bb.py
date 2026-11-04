@@ -53,10 +53,12 @@ def grid_plot(xkey, xlabel, out_name):
     n = len(MATERIALS)
     center = n // 2
     fig, axes = plt.subplots(1, n, figsize=figsize_double, sharey=False)
+    DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
     for i, (ax, material) in enumerate(zip(axes, MATERIALS)):
+        disp_mat = DISPLAY_NAMES.get(material, material)
         result = load_material(material)
         if result is None:
-            ax.set_title(f"{material}\n(not yet run)", fontsize=9)
+            ax.set_title(f"{disp_mat}\n(not yet run)", fontsize=9)
             if i == 0:
                 ax.set_ylabel("Axial force in N")
             if i == center:
@@ -67,7 +69,7 @@ def grid_plot(xkey, xlabel, out_name):
         ls = "-" if complete else "--"
         ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.3, marker="o",
                 markersize=2.2, markevery=2)
-        ax.set_title(material if complete else f"{material} (in progress)", fontsize=9)
+        ax.set_title(disp_mat if complete else f"{disp_mat} (in progress)", fontsize=9)
         if i == 0:
             ax.set_ylabel("Axial force in N")
         if i == center:

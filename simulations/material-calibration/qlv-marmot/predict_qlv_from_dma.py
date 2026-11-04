@@ -485,7 +485,8 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
 
         ax0.loglog(dma_fit["freq"], dma_fit["E_prime_data"], "o", markersize=2.0, color="gray", alpha=0.55, zorder=2)
         ax0.loglog(freq_dense, E_dense, "-", color=color, linewidth=1.4, zorder=3)
-        ax0.set_ylabel(f"\\textbf{{{mat}}}\nStorage $E'$ (MPa)", fontsize=7.2)
+        disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(mat, mat)
+        ax0.set_ylabel(f"\\textbf{{{disp_mat}}}\nStorage $E'$ (MPa)", fontsize=7.2)
         if r == 4:
             ax0.set_xlabel("Reduced freq. $f_r$ (Hz)", fontsize=7.5)
         ax0.grid(True, alpha=0.3, linewidth=0.5)
@@ -590,8 +591,9 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         sl = res["sim_results"]["slow"]["rmse_pct"]
         fs = res["sim_results"]["fast"]["rmse_pct"]
 
+        disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(mat, mat)
         table_tex.append(
-            f"        {mat} & {dma_fit['E0']:.1f} & {dma_fit['E_inf']:.1f} & {C1:.2f} & {C2:.2f} & {E_inst:.1f} & {vs:.1f}\\% & {sl:.1f}\\% & {fs:.1f}\\% \\\\"
+            f"        {disp_mat} & {dma_fit['E0']:.1f} & {dma_fit['E_inf']:.1f} & {C1:.2f} & {C2:.2f} & {E_inst:.1f} & {vs:.1f}\\% & {sl:.1f}\\% & {fs:.1f}\\% \\\\"
         )
 
     table_tex.extend([
