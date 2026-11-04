@@ -99,13 +99,12 @@ def main():
     for label in RATE_LABELS:
         color = RATE_COLOR[label]
         for test_id, (lbl, in_mean) in TESTS.items():
-            if lbl != label:
+            if lbl != label or not in_mean:
                 continue
             strain, stress = ramp_by_test[test_id]
             ax.plot(
                 strain, stress, color=color, alpha=INDIVIDUAL_ALPHA,
-                linewidth=0.8, linestyle="-" if in_mean else ":",
-                label=f"test {test_id} (excluded)" if not in_mean else f"test {test_id}",
+                linewidth=0.8, linestyle="-",
             )
 
         ramp_curves = [ramp_by_test[t] for t, (lbl, in_mean) in TESTS.items() if lbl == label and in_mean]
@@ -118,7 +117,9 @@ def main():
     ax.set_xlabel("Engineering strain in \\%")
     ax.set_ylabel("Engineering stress in MPa")
     ax.grid(True, alpha=0.4)
-    ax.legend(fontsize=6, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
+    handles, _ = ax.get_legend_handles_labels()
+    indiv_handle = plt.Line2D([], [], color="grey", alpha=0.6, linewidth=0.8, linestyle="-", label="individual test")
+    ax.legend(handles=[*handles, indiv_handle], fontsize=6, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
 
     fig.tight_layout()
 

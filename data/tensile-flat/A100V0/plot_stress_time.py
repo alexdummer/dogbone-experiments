@@ -111,15 +111,17 @@ def main():
 
     for ax, label in zip(axes, RATE_LABELS):
         color = RATE_COLOR[label]
+        first_rep = True
         for test_id, (lbl, in_mean) in TESTS.items():
-            if lbl != label:
+            if lbl != label or not in_mean:
                 continue
             df = dfs_by_test[test_id]
             ax.plot(
                 df["time_s"], df["stress"], color=color, alpha=INDIVIDUAL_ALPHA,
-                linewidth=0.8, linestyle="-" if in_mean else ":",
-                label=f"test {test_id} (excluded)" if not in_mean else f"test {test_id}",
+                linewidth=0.8, linestyle="-",
+                label="individual test" if first_rep else None,
             )
+            first_rep = False
 
         dfs = [dfs_by_test[t] for t, (lbl, in_mean) in TESTS.items() if lbl == label and in_mean]
         t, stress = mean_stress(dfs)

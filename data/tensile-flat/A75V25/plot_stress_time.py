@@ -124,27 +124,29 @@ def main():
             ax.set_title(f"{label} rate", fontsize=9)
             continue
 
+        first_rep = True
         for test_id, (lbl, in_mean) in TESTS.items():
-            if lbl != label:
+            if lbl != label or not in_mean:
                 continue
             df = dfs_by_test[test_id]
             ax.plot(
                 df["time_s"], df["stress"], color=color, alpha=INDIVIDUAL_ALPHA,
-                linewidth=0.8, linestyle="-" if in_mean else ":",
-                label=f"test {test_id} (excluded)" if not in_mean else f"test {test_id}",
+                linewidth=0.8, linestyle="-",
+                label="individual test" if first_rep else None,
             )
+            first_rep = False
 
         dfs = [dfs_by_test[t] for t, (lbl, in_mean) in TESTS.items() if lbl == label and in_mean]
         t, stress = mean_stress(dfs)
         ax.plot(t, stress, color=color, linewidth=1.8, linestyle="--", label="mean")
 
         rate = mean_strain_rate(dfs)
-        ax.set_xlabel("Time (s)")
-        ax.set_title(rf"{label} rate ($\dot\varepsilon\approx${100 * rate:.3g}\%/s, n={len(dfs)})", fontsize=9)
+        ax.set_xlabel("Time in s")
+        ax.set_title(rf"{label} rate ($\dot\varepsilon\approx${100 * rate:.3g}\%/s)", fontsize=9)
         ax.grid(True, alpha=0.4)
         ax.legend(fontsize=7)
 
-    axes[0].set_ylabel("Engineering stress (MPa)")
+    axes[0].set_ylabel("Engineering stress in MPa")
 
     fig.tight_layout()
 
