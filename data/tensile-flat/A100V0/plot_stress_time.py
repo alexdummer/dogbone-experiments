@@ -102,14 +102,27 @@ def mean_stress(dfs):
     return common_time, np.nanmean(stresses, axis=0)
 
 
+def ramp_strain_stress(df):
+    onset, ramp_end = ramp_bounds(df["position_mm"])
+    sl = slice(onset, ramp_end + 1)
+    return 100 * df["strain"].to_numpy()[sl], df["stress"].to_numpy()[sl]
+
+
+def mean_stress_vs_strain(ramp_curves):
+    max_strain = min(strain.max() for strain, _ in ramp_curves)
+    common_strain = np.linspace(0, max_strain, 200)
+    stresses = np.array([np.interp(common_strain, strain, stress) for strain, stress in ramp_curves])
+    return common_strain, stresses.mean(axis=0)
+
+
 def main():
     fig, axes = plt.subplots(
-        1, 3, figsize=figsize_double, sharey=True
+        1, 4, figsize=figsize_double, sharey=True
     )
 
     dfs_by_test = {test_id: load(test_id) for test_id in TESTS}
 
-    for ax, label in zip(axes, RATE_LABELS):
+    for ax, label in zip(axes[:3], RATE_LABELS):
         color = RATE_COLOR[label]
         first_rep = True
         for test_id, (lbl, in_mean) in TESTS.items():
@@ -119,7 +132,7 @@ def main():
             ax.plot(
                 df["time_s"], df["stress"], color=color, alpha=INDIVIDUAL_ALPHA,
                 linewidth=0.8, linestyle="-",
-                label="individual test" if first_rep else None,
+                label="replicate" if first_rep else None,
             )
             first_rep = False
 
@@ -129,9 +142,29 @@ def main():
 
         rate = mean_strain_rate(dfs)
         ax.set_xlabel("Time in s")
-        ax.set_title(rf"{label} rate ($\dot\varepsilon\approx${100 * rate:.3g}\%/s)", fontsize=9)
+        ax.set_title(rf"{label} ($\dot\varepsilon\approx${100 * rate:.3g}\%/s)", fontsize=8)
         ax.grid(True, alpha=0.4)
-        ax.legend(fontsize=7)
+        ax.legend(fontsize=6, loc="lower right")
+
+    # Panel 4: loading ramp stress vs strain
+    ax_ss = axes[3]
+    ramp_by_test = {test_id: ramp_strain_stress(df) for test_id, df in dfs_by_test.items()}
+    for label in RATE_LABELS:
+        color = RATE_COLOR[label]
+        for test_id, (lbl, in_mean) in TESTS.items():
+            if lbl != label or not in_mean:
+                continue
+            strain, stress = ramp_by_test[test_id]
+            ax_ss.plot(strain, stress, color=color, alpha=INDIVIDUAL_ALPHA, linewidth=0.8, linestyle="-")
+
+        ramp_curves = [ramp_by_test[t] for t, (lbl, in_mean) in TESTS.items() if lbl == label and in_mean]
+        strain, stress = mean_stress_vs_strain(ramp_curves)
+        ax_ss.plot(strain, stress, color=color, linewidth=1.8, linestyle="--", label=label)
+
+    ax_ss.set_xlabel(r"Strain in \%")
+    ax_ss.set_title("Ramp stress--strain", fontsize=8)
+    ax_ss.grid(True, alpha=0.4)
+    ax_ss.legend(fontsize=6, loc="lower right")
 
     axes[0].set_ylabel("Engineering stress in MPa")
 
