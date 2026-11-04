@@ -36,9 +36,10 @@ X_SYMMETRY_FACTOR = 2.0  # gripDisp -> full grip-to-grip elongation
 CROSS_SECTION_SYMMETRY_FACTOR = 4.0  # gripForce -> full-specimen axial force
 
 MODELS = [
-    ("", "GM", "-", "o"),
-    ("_bb", "BB", "--", "^"),
+    ("", "QLV-Marmot", "-", "o"),
+    ("_bb", "Bergström-Boyce", "--", "^"),
 ]
+DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
 
 
 def load_fe(material, suffix):
@@ -88,50 +89,63 @@ def save(fig, name):
 
 
 def grid_plot(xkey, xlabel, out_name):
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+
     n = len(MATERIALS)
     center = n // 2
     fig, axes = plt.subplots(1, n, figsize=figsize_double, sharey=False)
-    model_handles = []
     for i, (ax, material) in enumerate(zip(axes, MATERIALS)):
-        # Plot individual replicates as light dashed lines
-        reps = load_replicates(material)
-        for r_idx, (t_r, disp_r, force_r) in enumerate(reps):
-            x_r = t_r if xkey == "t" else disp_r
-            ax.plot(x_r, force_r, color="0.75", linestyle=":", linewidth=0.7, zorder=1)
+        disp_name = DISPLAY_NAMES.get(material, material)
 
-        # Plot mean experimental curve
-        exp = load_experiment(material)
-        if exp is not None:
-            t, disp, force = exp
-            x = t if xkey == "t" else disp
-            line, = ax.plot(x, force, color="0.25", linestyle="-", linewidth=1.1,
-                             zorder=2)
-            if i == 0:
-                model_handles.append((line, "Experiment (mean)"))
+        # Plot shaded experimental scatter band across replicates and mean curve
+        reps = load_replicates(material)
+        if reps:
+            if xkey == "t":
+                t_max = min(t_r.max() for t_r, _, _ in reps)
+                x_grid = np.linspace(0, t_max, 1000)
+                forces_interp = [np.interp(x_grid, t_r, force_r) for t_r, _, force_r in reps]
+            else:
+                disp_max = min(disp_r.max() for _, disp_r, _ in reps)
+                x_grid = np.linspace(0, disp_max, 1000)
+                forces_interp = [np.interp(x_grid, disp_r, force_r) for _, disp_r, force_r in reps]
+            f_min = np.min(forces_interp, axis=0)
+            f_max = np.max(forces_interp, axis=0)
+            f_mean = np.mean(forces_interp, axis=0)
+            ax.fill_between(x_grid, f_min, f_max, color="0.78", alpha=0.55, zorder=1)
+            ax.plot(x_grid, f_mean, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
+        else:
+            exp = load_experiment(material)
+            if exp is not None:
+                t, disp, force = exp
+                x = t if xkey == "t" else disp
+                ax.plot(x, force, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
+
+        # Plot FE models
         for suffix, model_label, ls, marker in MODELS:
             result = load_fe(material, suffix)
             if result is None:
                 continue
             t, disp, force = result
             x = t if xkey == "t" else disp
-            line, = ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.3,
-                             marker=marker, markersize=2.2, markevery=2, zorder=3)
-            if i == 0:
-                model_handles.append((line, model_label))
-        ax.set_title(material, fontsize=9)
+            ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.2,
+                    marker=marker, markersize=2.2, markevery=2, zorder=3)
+
+        ax.set_title(disp_name, fontsize=8.5)
+        ax.grid(True, alpha=0.4)
         if i == 0:
-            ax.set_ylabel("Axial force in N")
+            ax.set_ylabel("Axial force in N", fontsize=8.5)
         if i == center:
-            ax.set_xlabel(xlabel)
-    legend_entries = [("0.75", ":", None, "Replicate (n=3)"),
-                      ("0.25", "-", None, "Experiment (mean)")] + [
-        ("black", ls, marker, label) for _, label, ls, marker in MODELS
+            ax.set_xlabel(xlabel, fontsize=8.5)
+
+    legend_handles = [
+        Patch(facecolor="0.78", edgecolor="none", alpha=0.55, label="Experiment (scatter)"),
+        Line2D([], [], color="0.25", linestyle="-", linewidth=1.1, label="Experiment (mean)"),
+        Line2D([], [], color="black", linestyle="-", marker="o", markersize=3, label="QLV-Marmot"),
+        Line2D([], [], color="black", linestyle="--", marker="^", markersize=3, label="Bergström-Boyce"),
     ]
-    handles = [plt.Line2D([], [], color=c, linestyle=ls, marker=marker, markersize=4)
-               for c, ls, marker, _ in legend_entries]
-    labels = [label for _, _, _, label in legend_entries]
-    fig.legend(handles, labels, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.08),
-               frameon=False)
+    fig.legend(handles=legend_handles, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.08),
+               frameon=False, fontsize=7.5)
     fig.tight_layout()
     save(fig, out_name)
 
