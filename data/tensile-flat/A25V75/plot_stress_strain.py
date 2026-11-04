@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from plotstyle import colors, figsize_single  # noqa: E402
 
 CLEANED_DIR = Path(__file__).parent / "cleaned"
@@ -33,7 +34,6 @@ TESTS = {
     12: "Very slow",
     1: "Slow",
     2: "Slow",
-    3: "Slow",
     9: "Slow",
     4: "Fast",
     5: "Fast",

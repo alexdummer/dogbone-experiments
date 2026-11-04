@@ -1,8 +1,8 @@
 """Stress-vs-time plot for the A25V75 relaxation tests (all held at ~1 mm),
-one subplot per loading rate. Tests 1-3 and 9 ramp at the nominal baseline
-crosshead speed (~0.167 mm/s); tests 4-6 ramp at 10x that rate
-(~1.667 mm/s); tests 10-12 ramp at ~10x slower than baseline
-(~0.017 mm/s) -- plotted as a bold mean curve per rate group with
+one subplot per loading rate. Tests 1, 2, and 9 ramp at the nominal baseline
+crosshead speed (~0.167 mm/s; test 3 was stopped early and is excluded);
+tests 4-6 ramp at 10x that rate (~1.667 mm/s); tests 10-12 ramp at ~10x slower
+than baseline (~0.017 mm/s) -- plotted as a bold mean curve per rate group with
 individual specimens shown faded (alpha=0.3) behind it. Panel titles
 report the actual measured mean engineering strain rate over the ramp
 (not the nominal crosshead speed above), the same convention used for
@@ -25,7 +25,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from plotstyle import colors, figsize_double  # noqa: E402
 
 CLEANED_DIR = Path(__file__).parent / "cleaned"
@@ -42,7 +43,6 @@ TESTS = {
     12: "Very slow",
     1: "Slow",
     2: "Slow",
-    3: "Slow",
     9: "Slow",
     4: "Fast",
     5: "Fast",

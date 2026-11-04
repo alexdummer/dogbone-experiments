@@ -63,7 +63,7 @@ MATERIALS = {
         "dir": DATA_FLAT / "A25V75" / "cleaned",
         "rate_groups": {
             "very slow": [10, 11, 12],
-            "slow": [1, 2, 3, 9],
+            "slow": [1, 2, 9],  # test 3 excluded (short test, 373s vs ~607s)
             "fast": [4, 5, 6],
         },
     },
