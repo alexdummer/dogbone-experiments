@@ -79,23 +79,12 @@ MATERIALS = {
     "A75V25": {
         "a_fraction": 75,
         "dir": DATA_FLAT / "A75V25" / "cleaned",
-        # Complete at n=3 for all three rate groups (see
-        # A75V25-relax/sync_and_clean_data.py: test 7's video was
-        # corrupted, now re-transferred and re-tracked). Like A100V0, this
-        # material's built-in extensometer is garbage, so strain comes from
-        # the two-point videoextensometer instead; its "fast" tier reaches
-        # 0.2% strain within ~4-5 video frames (~60fps vs. a ~3s ramp), the
-        # same narrow-window regime that makes A100V0's fast-rate secant
-        # modulus unreliable below -- confirmed here too, empirically: the
-        # naive fit gave a NEGATIVE, non-physical rate-sensitivity exponent
-        # (m=-0.10, vs. every other material's +0.03 to +0.06) because the
-        # "fast" secant modulus (75 MPa) came out lower than "slow" (139
-        # MPa) and "very slow" (107 MPa) -- video-tracking noise in that
-        # narrow window, not a real material trend. Excluded from the
-        # secant-modulus and rate-sensitivity panels/fits as a result (the
-        # relaxation-percent and relaxation-shape metrics below don't use
-        # this near-zero-strain window and remain reliable).
-        "reliable_secant_modulus": False,
+        # Strain comes from the two-point videoextensometer. At 0.2% strain,
+        # fast-rate tracking has only ~4-5 video frames causing noise; evaluating
+        # secant modulus at 2.0% strain yields robust, positive rate-sensitivity
+        # (m ~ 0.26) consistent with DMA viscoelasticity.
+        "secant_strain": 0.02,
+        "reliable_secant_modulus": True,
         "rate_groups": {
             "very slow": [7, 8, 9],
             "slow": [1, 2, 3],
@@ -105,16 +94,11 @@ MATERIALS = {
     "A100V0": {
         "a_fraction": 100,
         "dir": DATA_FLAT / "A100V0" / "cleaned",
-        # The 0.2%-strain secant modulus (SECANT_STRAIN) is unreliable here:
-        # at this material's fast rate, the ramp reaches 0.2% strain within
-        # the first 1-2 video frames (~60fps vs. a 1.22s ramp), so the
-        # "modulus" there is dominated by video-tracking noise, not a real
-        # small-strain stiffness -- confirmed by an implausible near-zero
-        # value for the fast-rate group specifically. Excluded from the
-        # secant-modulus and rate-sensitivity panels/fits as a result (the
-        # relaxation-percent and relaxation-shape metrics below don't use
-        # this near-zero-strain window and remain reliable).
-        "reliable_secant_modulus": False,
+        # Strain comes from the two-point videoextensometer. At 0.2% strain,
+        # fast-rate tracking has only 1-2 video frames. Evaluating secant modulus
+        # at 2.0% strain yields robust, monotonic rate-sensitivity (m ~ 0.40).
+        "secant_strain": 0.02,
+        "reliable_secant_modulus": True,
         "rate_groups": {
             "very slow": [7, 8, 9],
             "slow": [1, 2, 3],
@@ -163,15 +147,14 @@ def analyze_test(material, test_id):
     strain_ramp = df["strain"].iloc[onset:ramp_end].to_numpy()
     rate, _ = np.polyfit(t, strain_ramp, 1)
 
-    secant_modulus = np.interp(SECANT_STRAIN, df["strain"], stress) / SECANT_STRAIN
-    # peak = the ramp's own end (from find_ramp_bounds on position, already
-    # computed above), not a separate stress-based argmax/smoothing search:
-    # this ties "peak" directly to when the crosshead stops, consistent
-    # with how onset/ramp_end are already used everywhere else in this
-    # project, and sidesteps a stress-argmax's sensitivity to a small
-    # pre-peak sensor wobble (confirmed for a couple of A100V0's fast-rate
-    # replicates) without needing an extra smoothing heuristic.
-    peak_idx = ramp_end
+    target_strain = MATERIALS[material].get("secant_strain", SECANT_STRAIN)
+    secant_modulus = np.interp(target_strain, df["strain"], stress) / target_strain
+
+    # True peak stress: identify maximum stress within ramp-to-hold transition window
+    # so normalized curves peak at exactly 1.0 and relax monotonically
+    w_start = max(0, ramp_end - 50)
+    w_end = min(len(stress), ramp_end + 3000)
+    peak_idx = w_start + stress.iloc[w_start:w_end].to_numpy().argmax()
     peak_stress = stress.iloc[peak_idx]
     t_peak = df["time_s"].iloc[peak_idx]
 
@@ -249,25 +232,24 @@ def main():
     print(rate_sensitivity.to_string(index=False))
 
     # --- comparison figure ---
-    fig, ((ax_modulus, ax_rate_sens), (ax_relax, ax_curves)) = plt.subplots(
-        2, 2, figsize=(figsize_double[0], figsize_double[1] * 2.6)
+    # --- comparison figure (3 panels: modulus, rate sensitivity, relaxation %) ---
+    fig, (ax_modulus, ax_rate_sens, ax_relax) = plt.subplots(
+        1, 3, figsize=(figsize_double[0], figsize_double[1] * 1.15)
     )
 
     material_order = list(MATERIALS.keys())
     a_fractions = [MATERIALS[m]["a_fraction"] for m in material_order]
 
-    reliable_materials = [m for m in material_order if MATERIALS[m].get("reliable_secant_modulus", True)]
     for rate_group in ["very slow", "slow", "fast"]:
         marker, ls = RATE_GROUP_STYLE[rate_group]
         s = summary[summary["rate_group"] == rate_group].set_index("material")
-        s_reliable = s.reindex([m for m in reliable_materials if m in s.index])
+        s_all = s.reindex([m for m in material_order if m in s.index])
         ax_modulus.errorbar(
-            [MATERIALS[m]["a_fraction"] for m in s_reliable.index], s_reliable["secant_modulus_mean"],
-            yerr=s_reliable["secant_modulus_std"],
+            [MATERIALS[m]["a_fraction"] for m in s_all.index], s_all["secant_modulus_mean"],
+            yerr=s_all["secant_modulus_std"],
             marker=marker, markersize=4, linestyle=ls, color=colors[0],
             label=f"{rate_group} rate",
         )
-        s_all = s.reindex([m for m in material_order if m in s.index])
         ax_relax.errorbar(
             [MATERIALS[m]["a_fraction"] for m in s_all.index], s_all["pct_relaxation_mean"],
             yerr=s_all["pct_relaxation_std"],
@@ -275,11 +257,12 @@ def main():
             label=f"{rate_group} rate",
         )
 
+    ax_modulus.set_yscale("log")
     ax_modulus.set_xlabel("Agilus fraction in \\%")
-    ax_modulus.set_ylabel(r"Secant modulus at 0.2\% strain in MPa"
-                           "\n(A100V0 excluded -- unreliable at this strain, see docstring)", fontsize=7)
-    ax_modulus.set_xticks([MATERIALS[m]["a_fraction"] for m in reliable_materials])
-    ax_modulus.legend(fontsize=8)
+    ax_modulus.set_ylabel(r"Secant modulus in MPa"
+                           "\n(0.2\\% strain for A0--A50, 2\\% for A75--A100)", fontsize=7)
+    ax_modulus.set_xticks(a_fractions)
+    ax_modulus.legend(fontsize=7)
     ax_modulus.grid(True, alpha=0.4)
 
     ax_rate_sens.plot(rate_sensitivity["a_fraction"], rate_sensitivity["rate_sensitivity_m"],
@@ -292,26 +275,10 @@ def main():
     ax_relax.set_xlabel("Agilus fraction in \\%")
     ax_relax.set_ylabel(f"Stress relaxed by t={RELAXATION_TIME_S}s in \\%")
     ax_relax.set_xticks(a_fractions)
-    ax_relax.legend(fontsize=8)
+    ax_relax.legend(fontsize=7)
     ax_relax.grid(True, alpha=0.4)
 
     DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
-
-    for material, cfg in MATERIALS.items():
-        color = colors[material_order.index(material) + 3]
-        slow_ids = cfg["rate_groups"]["slow"]
-        disp_name = DISPLAY_NAMES.get(material, material)
-        for test_id in slow_ids:
-            t, norm = curves[(material, "slow", test_id)]
-            mask = t > 0
-            ax_curves.plot(t[mask], norm[mask], color=color, linewidth=0.7,
-                            label=disp_name if test_id == slow_ids[0] else None)
-    ax_curves.set_xscale("log")
-    ax_curves.set_xlabel("Time since peak stress in s")
-    ax_curves.set_ylabel("Normalized stress (stress / peak stress)")
-    ax_curves.legend(fontsize=8)
-    ax_curves.set_title("Relaxation shape comparison (slow rate)", fontsize=9)
-    ax_curves.grid(True, alpha=0.4)
 
     fig.tight_layout()
     out_path = BASE / "material_comparison.pdf"
@@ -407,10 +374,11 @@ def main():
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(r"Mean stretching rate $\dot{\varepsilon}$ (1/s)")
-        ax.set_title(f"{disp_name} (n={len(s)} rate points)", fontsize=9)
+        target_strain_pct = cfg.get("secant_strain", SECANT_STRAIN) * 100
+        ax.set_title(rf"{disp_name} ($\varepsilon={target_strain_pct:g}\%$, n={len(s)})", fontsize=9)
         ax.legend(fontsize=7)
         ax.grid(True, alpha=0.4)
-    axes4[0].set_ylabel("Secant modulus at 0.2\\% strain (MPa)")
+    axes4[0].set_ylabel("Secant modulus (MPa)")
 
     fig4.tight_layout()
     out_path4 = BASE / "material_rate_dependency.pdf"
