@@ -19,11 +19,13 @@ import pandas as pd
 from fit_bb_model import BASE, MATERIALS, PLACEHOLDER_MATERIALS, validate_bb, validate_bb_ramp, make_grid_plot
 from fit_qlv_model import mean_strain_rates
 
+CALIB_DIR = Path(__file__).resolve().parents[1]
+PARAMS_DIR = CALIB_DIR / "parameters"
 BASES = ["ArrudaBoyce"]
 
 
 def main():
-    params = pd.read_csv(BASE / "bb_params.csv")
+    params = pd.read_csv(PARAMS_DIR / "bb_params.csv")
     params = params[params["hyperelastic_base"].isin(BASES)]
 
     validation_rows = []
@@ -45,14 +47,14 @@ def main():
 
     validation = pd.concat(validation_rows, ignore_index=True)
 
-    prf_validation = pd.read_csv(BASE / "prf_vs_qlv_comparison.csv")[
+    prf_validation = pd.read_csv(PARAMS_DIR / "prf_vs_qlv_comparison.csv")[
         ["material", "rate_group", "test_id", "rmse_pct_of_peak_prf"]
     ].rename(columns={"rmse_pct_of_peak_prf": "rmse_pct_of_peak_prf_1d"})
     merged = validation.merge(prf_validation, on=["material", "rate_group", "test_id"], how="left")
     merged = merged.rename(columns={"rmse_pct_of_peak": "rmse_pct_of_peak_bb"})
     merged["improvement_pct_points"] = merged["rmse_pct_of_peak_prf_1d"] - merged["rmse_pct_of_peak_bb"]
-    merged.to_csv(BASE / "bb_vs_prf_comparison.csv", index=False)
-    print(f"saved {BASE / 'bb_vs_prf_comparison.csv'}")
+    merged.to_csv(PARAMS_DIR / "bb_vs_prf_comparison.csv", index=False)
+    print(f"saved {PARAMS_DIR / 'bb_vs_prf_comparison.csv'}")
     print("\n=== Bergstrom-Boyce (Marmot) vs. 1D PRF baseline (RMSE, % of peak stress) ===")
     print(merged[["material", "rate_group", "rmse_pct_of_peak_prf_1d",
                   "rmse_pct_of_peak_bb", "improvement_pct_points"]].to_string(index=False))
@@ -62,10 +64,10 @@ def main():
     strain_rates = mean_strain_rates()
     make_grid_plot(plot_data, rate_groups, materials, BASES, "Time in s",
                     "Bergstrom-Boyce (Marmot) vs. measured stress relaxation",
-                    BASE / "bb_model_validation_grid", strain_rates=strain_rates)
+                    CALIB_DIR / "bb_model_validation_grid", strain_rates=strain_rates)
     make_grid_plot(ramp_data, rate_groups, materials, BASES, "Engineering strain in \\%",
                     "Bergstrom-Boyce (Marmot) vs. measured stress-strain (ramp only)",
-                    BASE / "bb_stress_strain_grid", strain_rates=strain_rates, rate_label_loc="upper left")
+                    CALIB_DIR / "bb_stress_strain_grid", strain_rates=strain_rates, rate_label_loc="upper left")
 
 
 if __name__ == "__main__":

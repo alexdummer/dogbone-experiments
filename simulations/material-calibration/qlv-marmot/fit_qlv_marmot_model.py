@@ -444,7 +444,10 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
                 ax.set_title(rate_group, fontsize=9)
             if col == 0:
                 disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(material, material)
-                ax.set_ylabel(f"{disp_mat}\nEngineering stress in MPa", fontsize=8)
+                if disp_mat == "A50":
+                    ax.set_ylabel(f"{disp_mat}\nEngineering stress in MPa", fontsize=8)
+                else:
+                    ax.set_ylabel(disp_mat, fontsize=8)
             if row == n_real - 1:
                 ax.set_xlabel(xlabel)
             if strain_rates is not None:

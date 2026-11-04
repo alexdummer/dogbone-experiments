@@ -325,7 +325,8 @@ def main():
                 ax.plot(t[mask], norm[mask], color=color, linestyle=ls, linewidth=0.7,
                         label=f"{rate_group} rate" if test_id == ids[0] else None)
         ax.set_xscale("log")
-        ax.set_xlabel("Time since peak stress in s", fontsize=8.5)
+        if disp_name == "A50":
+            ax.set_xlabel("Time since peak stress in s", fontsize=8.5)
         ax.set_title(disp_name, fontsize=8.5)
         ax.legend(fontsize=7.0)
         ax.grid(True, alpha=0.4)
