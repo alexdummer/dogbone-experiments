@@ -467,7 +467,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
     }
     rate_groups = ["very slow", "slow", "fast"]
 
-    fig, axes = plt.subplots(5, 4, figsize=(18 / 2.54, 19.5 / 2.54))
+    fig, axes = plt.subplots(5, 4, figsize=(19 / 2.54, 19.5 / 2.54))
 
     for r, mat in enumerate(mat_order):
         res = all_results[mat]
@@ -486,13 +486,13 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         ax0.loglog(dma_fit["freq"], dma_fit["E_prime_data"], "o", markersize=2.0, color="gray", alpha=0.55, zorder=2)
         ax0.loglog(freq_dense, E_dense, "-", color=color, linewidth=1.4, zorder=3)
         disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(mat, mat)
-        ax0.set_ylabel(f"\\textbf{{{disp_mat}}}\nStorage $E'$ (MPa)", fontsize=7.2)
+        ax0.set_ylabel(f"\\textbf{{{disp_mat}}}\nStorage $E'$ (MPa)", fontsize=8.0)
         if r == 4:
-            ax0.set_xlabel("Reduced freq. $f_r$ (Hz)", fontsize=7.5)
+            ax0.set_xlabel("Reduced freq. $f_r$ (Hz)", fontsize=8.0)
         ax0.grid(True, alpha=0.3, linewidth=0.5)
         if r == 0:
-            ax0.set_title(r"(a) DMA Master ($20^\circ$C)", fontsize=8, fontweight="bold")
-        ax0.text(0.06, 0.08, f"$E_0={dma_fit['E0']:.0f}$", transform=ax0.transAxes, fontsize=5.8,
+            ax0.set_title(r"(a) DMA Master ($20^\circ$C)", fontsize=8.5, fontweight="bold")
+        ax0.text(0.06, 0.08, f"$E_0={dma_fit['E0']:.0f}$", transform=ax0.transAxes, fontsize=6.8,
                  bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.75, edgecolor="none"))
 
         # Max peak stress across rates for consistent y-limits
@@ -519,24 +519,24 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
             ax.grid(True, alpha=0.3, linewidth=0.5)
 
             if c_idx == 1:
-                ax.set_ylabel(r"Stress $\sigma$ (MPa)", fontsize=7.2)
+                ax.set_ylabel(r"Stress $\sigma$ (MPa)", fontsize=8.0)
             else:
                 ax.tick_params(labelleft=False)
 
             if r == 4:
-                ax.set_xlabel(r"Time $t$ (s)", fontsize=7.5)
+                ax.set_xlabel(r"Time $t$ (s)", fontsize=8.0)
 
             if r == 0:
                 col_titles = [r"(b) Very Slow ($0.017\,\mathrm{mm/s}$)",
                               r"(c) Slow ($0.167\,\mathrm{mm/s}$)",
                               r"(d) Fast ($1.67\,\mathrm{mm/s}$)"]
-                ax.set_title(col_titles[c_idx - 1], fontsize=8, fontweight="bold")
+                ax.set_title(col_titles[c_idx - 1], fontsize=8.5, fontweight="bold")
 
             # Annotation badge
             is_cal = (rg == cal_rate_group)
             tag_label = "Cal. Ramp" if is_cal else "Blind Pred."
             err_text = f"{tag_label}\nRMSE: {sres['rmse_pct']:.1f}\\%"
-            ax.text(0.95, 0.94, err_text, transform=ax.transAxes, fontsize=5.6,
+            ax.text(0.95, 0.94, err_text, transform=ax.transAxes, fontsize=6.8,
                     ha="right", va="top",
                     bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.75, edgecolor="none"))
 
@@ -546,7 +546,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated QLV (1 ramp)"),
         Line2D([0], [0], color="black", linestyle=":", linewidth=1.0, label="Joint 3-rate fitted baseline"),
     ]
-    fig.legend(handles=legend_handles, loc="upper center", ncol=3, fontsize=7.5,
+    fig.legend(handles=legend_handles, loc="upper center", ncol=3, fontsize=8.0,
                bbox_to_anchor=(0.5, 0.995), frameon=False)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
 

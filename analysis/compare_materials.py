@@ -234,7 +234,7 @@ def main():
     # --- comparison figure ---
     # --- comparison figure (3 panels: modulus, rate sensitivity, relaxation %) ---
     fig, (ax_modulus, ax_rate_sens, ax_relax) = plt.subplots(
-        1, 3, figsize=(figsize_double[0], figsize_double[1] * 1.15)
+        1, 3, figsize=figsize_double
     )
 
     material_order = list(MATERIALS.keys())
@@ -258,24 +258,24 @@ def main():
         )
 
     ax_modulus.set_yscale("log")
-    ax_modulus.set_xlabel("Agilus fraction in \\%")
+    ax_modulus.set_xlabel("Agilus fraction in \\%", fontsize=8.5)
     ax_modulus.set_ylabel(r"Secant modulus in MPa"
-                           "\n(0.2\\% strain for A0--A50, 2\\% for A75--A100)", fontsize=7)
+                           "\n(0.2\\% strain for A0--A50, 2\\% for A75--A100)", fontsize=8.5)
     ax_modulus.set_xticks(a_fractions)
-    ax_modulus.legend(fontsize=7)
+    ax_modulus.legend(fontsize=7.5)
     ax_modulus.grid(True, alpha=0.4)
 
     ax_rate_sens.plot(rate_sensitivity["a_fraction"], rate_sensitivity["rate_sensitivity_m"],
                        marker="o", color=colors[2])
-    ax_rate_sens.set_xlabel("Agilus fraction in \\%")
-    ax_rate_sens.set_ylabel(r"Rate sensitivity $m = \Delta\ln E / \Delta\ln\dot{\varepsilon}$")
+    ax_rate_sens.set_xlabel("Agilus fraction in \\%", fontsize=8.5)
+    ax_rate_sens.set_ylabel(r"Rate sensitivity $m = \Delta\ln E / \Delta\ln\dot{\varepsilon}$", fontsize=8.5)
     ax_rate_sens.set_xticks(a_fractions)
     ax_rate_sens.grid(True, alpha=0.4)
 
-    ax_relax.set_xlabel("Agilus fraction in \\%")
-    ax_relax.set_ylabel(f"Stress relaxed by t={RELAXATION_TIME_S}s in \\%")
+    ax_relax.set_xlabel("Agilus fraction in \\%", fontsize=8.5)
+    ax_relax.set_ylabel(f"Stress relaxed by t={RELAXATION_TIME_S}s in \\%", fontsize=8.5)
     ax_relax.set_xticks(a_fractions)
-    ax_relax.legend(fontsize=7)
+    ax_relax.legend(fontsize=7.5)
     ax_relax.grid(True, alpha=0.4)
 
     DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
@@ -298,10 +298,10 @@ def main():
             ax_curves_fast.plot(t[mask], norm[mask], color=color, linewidth=0.7,
                                  label=disp_name if test_id == fast_ids[0] else None)
     ax_curves_fast.set_xscale("log")
-    ax_curves_fast.set_xlabel("Time since peak stress in s")
-    ax_curves_fast.set_ylabel("Normalized stress (stress / peak stress)")
-    ax_curves_fast.legend(fontsize=8)
-    ax_curves_fast.set_title("Relaxation shape comparison (fast rate)", fontsize=9)
+    ax_curves_fast.set_xlabel("Time since peak stress in s", fontsize=8.5)
+    ax_curves_fast.set_ylabel("Normalized stress (stress / peak stress)", fontsize=8.5)
+    ax_curves_fast.legend(fontsize=7.5)
+    ax_curves_fast.set_title("Relaxation shape comparison (fast rate)", fontsize=8.5)
     ax_curves_fast.grid(True, alpha=0.4)
 
     fig2.tight_layout()
@@ -312,12 +312,7 @@ def main():
 
     # --- relaxation shape comparison: slow vs fast, per material ---
     n_materials = len(MATERIALS)
-    # figsize_double is tuned for 4 panels; scale width to keep each panel's
-    # own width (and thus title/legend legibility) constant as materials
-    # are added, rather than squeezing more panels into a fixed total width.
-    fig3, axes3 = plt.subplots(1, n_materials,
-                                figsize=(figsize_double[0] * n_materials / 4, figsize_double[1]),
-                                sharey=True)
+    fig3, axes3 = plt.subplots(1, n_materials, figsize=figsize_double, sharey=True)
     for ax, (material, cfg) in zip(axes3, MATERIALS.items()):
         color = colors[material_order.index(material) + 3]
         disp_name = DISPLAY_NAMES.get(material, material)
@@ -330,11 +325,11 @@ def main():
                 ax.plot(t[mask], norm[mask], color=color, linestyle=ls, linewidth=0.7,
                         label=f"{rate_group} rate" if test_id == ids[0] else None)
         ax.set_xscale("log")
-        ax.set_xlabel("Time since peak stress in s")
-        ax.set_title(disp_name, fontsize=9)
-        ax.legend(fontsize=7)
+        ax.set_xlabel("Time since peak stress in s", fontsize=8.5)
+        ax.set_title(disp_name, fontsize=8.5)
+        ax.legend(fontsize=7.0)
         ax.grid(True, alpha=0.4)
-    axes3[0].set_ylabel("Normalized stress (stress / peak stress)")
+    axes3[0].set_ylabel("Normalized stress (stress / peak stress)", fontsize=8.5)
 
     fig3.tight_layout()
     out_path3 = BASE / "material_relaxation_shape_rate_comparison.pdf"

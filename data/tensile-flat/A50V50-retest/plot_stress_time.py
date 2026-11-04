@@ -150,9 +150,9 @@ def main():
 
         rate = mean_strain_rate(dfs)
         ax.set_xlabel("Time in s")
-        ax.set_title(rf"{label} ($\dot\varepsilon\approx${100 * rate:.3g}\%/s)", fontsize=8)
+        ax.set_title(rf"{label} ($\dot\varepsilon\approx${100 * rate:.3g}\%/s)", fontsize=8.5)
         ax.grid(True, alpha=0.4)
-        ax.legend(fontsize=6, loc="lower right")
+        ax.legend(fontsize=7.5, loc="lower right")
 
     # Panel 4: loading ramp stress vs strain
     ax_ss = axes[3]
@@ -170,9 +170,9 @@ def main():
         ax_ss.plot(strain, stress, color=color, linewidth=1.8, linestyle="--", label=label)
 
     ax_ss.set_xlabel(r"Strain in \%")
-    ax_ss.set_title("Ramp stress--strain", fontsize=8)
+    ax_ss.set_title("Ramp stress--strain", fontsize=8.5)
     ax_ss.grid(True, alpha=0.4)
-    ax_ss.legend(fontsize=6, loc="lower right")
+    ax_ss.legend(fontsize=7.5, loc="lower right")
 
     axes[0].set_ylabel("Engineering stress in MPa")
 
