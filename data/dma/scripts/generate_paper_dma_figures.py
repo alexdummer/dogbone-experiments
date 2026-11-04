@@ -56,11 +56,11 @@ DISPLAY_NAMES = {
     "A100V0": "A100",
 }
 MAT_LABELS = {
-    "A0V100": "A0 (0\\% Agilus)",
-    "A25V75": "A25 (25\\% Agilus)",
-    "A50V50": "A50 (50\\% Agilus)",
-    "A75V25": "A75 (75\\% Agilus)",
-    "A100V0": "A100 (100\\% Agilus)",
+    "A0V100": "A0",
+    "A25V75": "A25",
+    "A50V50": "A50",
+    "A75V25": "A75",
+    "A100V0": "A100",
 }
 
 QUALIFYING_REPLICATES = {
