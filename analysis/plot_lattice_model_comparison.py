@@ -30,8 +30,9 @@ X_SYMMETRY_FACTOR = 2.0  # gripDisp -> full grip-to-grip elongation
 CROSS_SECTION_SYMMETRY_FACTOR = 4.0  # gripForce -> full-specimen axial force
 
 MODELS = [
-    ("", "GM", "-", "o"),
-    ("_bb", "BB", "--", "^"),
+    ("", "QLV-Marmot", "-", "o"),
+    ("_bb", "Bergström-Boyce", "--", "^"),
+    ("_fractional_schapery", "Fractional Schapery", "-.", "s"),
 ]
 
 
@@ -81,7 +82,7 @@ def grid_plot(xkey, xlabel, out_name):
     handles = [plt.Line2D([], [], color="black", linestyle=ls, marker=marker, markersize=4)
                for _, _, ls, marker in MODELS]
     labels = [label for _, label, _, _ in MODELS]
-    fig.legend(handles, labels, loc="upper center", ncol=2, bbox_to_anchor=(0.5, 1.08),
+    fig.legend(handles, labels, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.08),
                frameon=False)
     fig.tight_layout()
     save(fig, out_name)

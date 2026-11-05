@@ -38,6 +38,7 @@ CROSS_SECTION_SYMMETRY_FACTOR = 4.0  # gripForce -> full-specimen axial force
 MODELS = [
     ("", "QLV-Marmot", "-", "o"),
     ("_bb", "Bergström-Boyce", "--", "^"),
+    ("_fractional_schapery", "Fractional Schapery", "-.", "s"),
 ]
 DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
 
@@ -143,8 +144,9 @@ def grid_plot(xkey, xlabel, out_name):
         Line2D([], [], color="0.25", linestyle="-", linewidth=1.1, label="Experiment (mean)"),
         Line2D([], [], color="black", linestyle="-", marker="o", markersize=3, label="QLV-Marmot"),
         Line2D([], [], color="black", linestyle="--", marker="^", markersize=3, label="Bergström-Boyce"),
+        Line2D([], [], color="black", linestyle="-.", marker="s", markersize=3, label="Fractional Schapery"),
     ]
-    fig.legend(handles=legend_handles, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.08),
+    fig.legend(handles=legend_handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.08),
                frameon=False, fontsize=7.5)
     fig.tight_layout()
     save(fig, out_name)

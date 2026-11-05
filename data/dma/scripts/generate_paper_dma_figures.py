@@ -292,7 +292,7 @@ ax1.set_xlabel(r"Reduced frequency $f_r$ (Hz) at $T_{\mathrm{ref}} = 20^\circ$C"
 ax1.set_ylabel(r"Storage modulus $E'$ (MPa)")
 ax1.set_xlim(1e-12, 1e15)
 ax1.set_ylim(0.5, 4500)
-ax1.legend(loc="upper left", fontsize=7.5)
+ax1.legend(loc="lower right", fontsize=7.5)
 
 sns.despine(fig=fig)
 fig.tight_layout()
@@ -312,18 +312,17 @@ table_tex = [
     "\\begin{table}[htpb!]",
     "    \\centering",
     "    \\small",
-    "    \\caption{Dynamic mechanical analysis (DMA) properties at \\SI{1}{\\hertz} across three experimental replicates ($n=3$) and their mean for each digital composite blend. Reference temperature for TTS is $T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$.}",
-    "    \\label{tab:dma-summary}",
-    "    \\begin{tabular}{lcccccc}",
+    "    \\caption{Dynamic mechanical analysis (DMA) properties at \\SI{1}{\\hertz} across individual experimental replicates ($n=3$) and their mean values for each digital composite blend. Reference temperature for TTS is $T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$.}",
+    "    \\label{tab:dma-replicates-appendix}",
+    "    \\begin{tabular}{lccccc}",
     "        \\toprule",
-    "        Blend & Agilus Vol.\\ & Replicate & $T_g$ & $(\\tan\\delta)_{\\mathrm{max}}$ & $E'_g$ (Glassy) & $E'_r$ (Rubbery) \\\\",
-    "         & (\\%) & ID & (\\si{\\celsius}) & (--) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) \\\\",
+    "        Blend & Replicate & $T_g$ & $(\\tan\\delta)_{\\mathrm{max}}$ & $E'_g$ (Glassy) & $E'_r$ (Rubbery) \\\\",
+    "         & ID & (\\si{\\celsius}) & (--) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) \\\\",
     "        \\midrule",
 ]
 
 for row in summary_table_data:
     mat = DISPLAY_NAMES.get(row["Material"], row["Material"])
-    agilus_pct = 100 - row["VW_pct"]
     reps = row["reps"]
     n_reps = len(reps)
     
@@ -333,15 +332,15 @@ for row in summary_table_data:
             sample_name = sample_name.replace(k, v)
         if idx == 0:
             table_tex.append(
-                f"        \\multirow{{{n_reps + 1}}}{{*}}{{{mat}}} & \\multirow{{{n_reps + 1}}}{{*}}{{{agilus_pct}}} & {sample_name} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
+                f"        \\multirow{{{n_reps + 1}}}{{*}}{{{mat}}} & {sample_name} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
             )
         else:
             table_tex.append(
-                f"         &  & {sample_name} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
+                f"         & {sample_name} & {r['Tg']:.1f} & {r['tan_max']:.2f} & {r['Eg']:.1f} & {r['Er']:.2f} \\\\"
             )
     # Mean
     table_tex.append(
-        f"         &  & \\textbf{{Mean}} & \\textbf{{{row['Tg_mean']:.1f}}} & \\textbf{{{row['tan_mean']:.2f}}} & \\textbf{{{row['Eg_mean']:.1f}}} & \\textbf{{{row['Er_mean']:.2f}}} \\\\"
+        f"         & \\textbf{{Mean}} & \\textbf{{{row['Tg_mean']:.1f}}} & \\textbf{{{row['tan_mean']:.2f}}} & \\textbf{{{row['Eg_mean']:.1f}}} & \\textbf{{{row['Er_mean']:.2f}}} \\\\"
     )
     if row["Material"] != MAT_ORDER[-1]:
         table_tex.append("        \\midrule")

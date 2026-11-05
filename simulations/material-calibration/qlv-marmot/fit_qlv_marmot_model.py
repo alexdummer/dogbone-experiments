@@ -382,7 +382,8 @@ def validate_ramp(material, cfg, base_name, C1, C2, C3, gammas, taus):
 
 
 def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel, suptitle, out_path,
-                    strain_rates=None, sharex=True, rate_label_loc="upper right"):
+                    strain_rates=None, sharex=True, rate_label_loc="upper right",
+                    inset_data_by_material_base=None):
     """materials may include compositions with no entry in data_by_material_base
     (e.g. PLACEHOLDER_MATERIALS) -- those rows are rendered as empty "pending"
     panels, compressed to a fraction of a normal row's height, rather than
@@ -404,7 +405,7 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
     # paper. Capping the total height directly, rather than re-tuning a
     # per-row constant by hand every time a material is added, keeps this
     # safe regardless of how many real/placeholder rows exist in the future.
-    MAX_TOTAL_HEIGHT_IN = 7.5  # ~19cm rendered height, well clear of the danger zone
+    MAX_TOTAL_HEIGHT_IN = 8.5  # ~21cm rendered height, well clear of the danger zone
     per_row_scale = min(0.8, MAX_TOTAL_HEIGHT_IN / (figsize_double[1] * sum(height_ratios)))
     fig, axes = plt.subplots(len(materials), 3,
                               figsize=(figsize_double[0], figsize_double[1] * per_row_scale * sum(height_ratios)),
@@ -439,7 +440,7 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
                         marker=BASE_MARKER[base_name], markersize=2.2, markevery=4)
             if measured is not None:
                 ax.plot(x_full, measured, color=color, linewidth=2.2, alpha=0.35, zorder=0)
-            ax.grid(True, alpha=0.4)
+            ax.grid(True, alpha=0.3)
             if row == 0:
                 ax.set_title(rate_group, fontsize=9)
             if col == 0:
@@ -456,7 +457,27 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
                     label_x, ha = (0.04, "left") if rate_label_loc == "upper left" else (0.96, "right")
                     ax.text(label_x, 0.96, rf"$\dot\varepsilon\approx${100 * rate:.3g}\%/s", fontsize=6,
                             ha=ha, va="top", transform=ax.transAxes, color="black",
-                            bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.7))
+                            bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.75))
+
+            # Optional inset stress-strain plot during loading ramp
+            if inset_data_by_material_base is not None and material in inset_data_by_material_base:
+                ax_ins = ax.inset_axes([0.52, 0.14, 0.42, 0.42])
+                for base_name in bases:
+                    if base_name not in inset_data_by_material_base[material] or rate_group not in inset_data_by_material_base[material][base_name]:
+                        continue
+                    rx_full, r_meas, rx_ds, r_pred = inset_data_by_material_base[material][base_name][rate_group]
+                    if r_meas is not None:
+                        ax_ins.plot(rx_full, r_meas, color=color, linewidth=1.5, alpha=0.35)
+                    ax_ins.plot(rx_ds, r_pred, color=color, linewidth=0.9, linestyle=BASE_LINESTYLE[base_name],
+                                marker=BASE_MARKER[base_name], markersize=1.5, markevery=3)
+                ax_ins.set_facecolor("white")
+                ax_ins.tick_params(labelsize=4.5, pad=1, length=1.5, width=0.5)
+                ax_ins.grid(True, alpha=0.25, linewidth=0.4)
+                for spine in ax_ins.spines.values():
+                    spine.set_linewidth(0.5)
+                    spine.set_color("#555555")
+                ax_ins.set_xlabel(r"$\varepsilon$ (\%)", fontsize=5.0, labelpad=0.5)
+                ax_ins.set_ylabel(r"$\sigma$ (MPa)", fontsize=5.0, labelpad=0.5)
 
     from matplotlib.lines import Line2D
     legend_handles = [Line2D([0], [0], color="grey", alpha=0.35, linewidth=2.2, label="measured")]

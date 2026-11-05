@@ -75,7 +75,8 @@ def main():
     strain_rates = mean_strain_rates()
     make_grid_plot(plot_data, rate_groups, materials, BASES, "Time in s",
                     "CompressibleFiniteStrainLinearViscoelasticity (Marmot) vs. measured stress relaxation",
-                    BASE / "qlv_marmot_validation_grid", strain_rates=strain_rates)
+                    BASE / "qlv_marmot_validation_grid", strain_rates=strain_rates,
+                    inset_data_by_material_base=ramp_data)
     make_grid_plot(ramp_data, rate_groups, materials, BASES, "Engineering strain in \\%",
                     "CompressibleFiniteStrainLinearViscoelasticity (Marmot) vs. measured stress-strain (ramp only)",
                     BASE / "qlv_marmot_stress_strain_grid", strain_rates=strain_rates, sharex=False,

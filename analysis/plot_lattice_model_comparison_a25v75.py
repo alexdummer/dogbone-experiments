@@ -31,6 +31,7 @@ CROSS_SECTION_SYMMETRY_FACTOR = 4.0  # gripForce -> full-specimen axial force
 MODELS = [
     ("", "GM", colors[0], "-", "o"),
     ("_bb", "BB", colors[1], "--", "^"),
+    ("_fractional_schapery", "FS", colors[2], "-.", "s"),
 ]
 
 
