@@ -79,11 +79,10 @@ MATERIALS = {
     },
     "A75V25": {
         "dir": DATA_FLAT / "A75V25" / "cleaned",
-        # PARTIAL: "very slow" is n=2 (test 7's video is corrupted, not yet
-        # re-recorded); "slow"/"fast" are complete at n=3. See
-        # A75V25-relax/sync_and_clean_data.py.
+        # Test 9 and re-transferred test 7 track full 148.5s ramp; test 8 videoextensometer
+        # truncated early at ~82% of ramp. Test 9 is the primary clean representative test.
         "rate_groups": {
-            "very slow": [8, 9],
+            "very slow": [9, 7, 8],
             "slow": [1, 2, 3],
             "fast": [4, 5, 6],
         },

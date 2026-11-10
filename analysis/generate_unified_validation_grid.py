@@ -133,14 +133,14 @@ def simulate_all():
         bb_time_data[material] = bb_time
         bb_ramp_data[material] = bb_ramp
 
-        # 3. Fractional Schapery (Mooney-Rivlin base)
+        # 3. Fractional Schapery (Neo-Hookean base)
         r_fs = params_fs[
-            (params_fs["material"] == material) & (params_fs["hyperelastic_base"] == "MooneyRivlin")
+            (params_fs["material"] == material) & (params_fs["hyperelastic_base"] == "NeoHooke")
         ].iloc[0]
         _, fs_time = validate_fs(
             material,
             cfg,
-            "MooneyRivlin",
+            "NeoHooke",
             r_fs["C1"],
             r_fs["C2"],
             r_fs["C3"],
@@ -154,7 +154,7 @@ def simulate_all():
         fs_ramp = validate_fs_ramp(
             material,
             cfg,
-            "MooneyRivlin",
+            "NeoHooke",
             r_fs["C1"],
             r_fs["C2"],
             r_fs["C3"],
@@ -334,7 +334,7 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
         Line2D([0], [0], color="0.4", alpha=0.5, linewidth=2.0, label="measured"),
         Line2D([0], [0], color="black", linestyle="-", marker="o", markersize=3.5, label="Generalized-Maxwell (Mooney-Rivlin)"),
         Line2D([0], [0], color="black", linestyle="--", marker="^", markersize=3.5, label="Bergström-Boyce (Arruda-Boyce)"),
-        Line2D([0], [0], color="black", linestyle="-.", marker="s", markersize=3.5, label="Fractional Schapery (Mooney-Rivlin)"),
+        Line2D([0], [0], color="black", linestyle="-.", marker="s", markersize=3.5, label="Fractional Schapery (Neo-Hookean)"),
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=4, fontsize=7.0, bbox_to_anchor=(0.5, 1.02), frameon=False)
 
