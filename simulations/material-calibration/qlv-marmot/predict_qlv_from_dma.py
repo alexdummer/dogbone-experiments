@@ -2,13 +2,17 @@
 """
 predict_qlv_from_dma.py
 
-Investigate whether multi-rate tensile stress-relaxation tests can be predicted
-purely by:
-1. Extracting the linear viscoelastic relaxation spectrum (Prony series) from DMA master curves at 20 C.
-2. Fitting only the instantaneous Mooney-Rivlin parameters (C1, C2) from a single loading ramp (e.g. fast rate).
-3. Performing blind forward predictions for all other strain rates and the full 10-minute relaxation hold.
-
-Uses Marmot's CompressibleFiniteStrainLinearViscoelasticity material model with N (default 6) Maxwell elements.
+Cross-modality constitutive modeling and blind forward predictions:
+1. Extract linear viscoelastic relaxation spectra from small-strain DMA master curves at 20 C:
+   - Discrete 6-term generalized Maxwell spectrum (gammas, taus) for QLV.
+   - Continuous fractional power-law spectrum (alpha, tau0, g_inf) for Fractional Schapery.
+2. Calibrate hyperelastic base parameters on a SINGLE tensile loading ramp:
+   - Mooney-Rivlin parameters (C1, C2) for QLV.
+   - Neo-Hookean parameter (C1) for Fractional Schapery (with bulk modulus kappa from physical nu).
+   Default calibration rate: "slow" (0.167 mm/s), directly matching the lattice experiment rate.
+3. Perform blind forward predictions across the remaining rates ("very slow" 0.017 mm/s, "fast" 1.67 mm/s)
+   and full 600-second stress-relaxation holds.
+4. Generate comparative 5x4 validation grid and LaTeX summary table.
 """
 
 import argparse
@@ -19,13 +23,17 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
+import seaborn as sns
+from matplotlib.lines import Line2D
 
 # Add local paths for helper imports
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SYS_PATHS = [
     REPO_ROOT / "simulations" / "material-calibration" / "qlv-marmot",
+    REPO_ROOT / "simulations" / "material-calibration" / "fractional-schapery",
     REPO_ROOT / "simulations" / "material-calibration" / "1d-qlv",
     REPO_ROOT / "simulations" / "material-calibration" / "prf",
+    REPO_ROOT / "simulations" / "material-calibration",
     REPO_ROOT / "analysis",
 ]
 for p in SYS_PATHS:
@@ -36,6 +44,8 @@ import marmot
 from fit_prf_model import downsample_for_fit
 from fit_qlv_model import MATERIALS, load, find_ramp_bounds, mean_strain_rates
 import fit_qlv_marmot_model as qm
+from fit_fractional_schapery_model import _simulate_once as sim_fs, elastic_from_C1
+from poisson_ratios import POISSON_RATIOS
 from plotstyle import colors, figsize_double
 
 DMA_RAW_DIR = REPO_ROOT / "data" / "dma" / "raw"
@@ -49,6 +59,8 @@ QUALIFYING_DMA_SAMPLES = {
     "A75V25": ["A75V25-2", "A75V25-3", "A75V25-4"],
     "A100V0": ["A100V0-1", "A100V0-2", "A100V0-3"],
 }
+
+FACTORS_FS = np.array([0.01, 0.1, 1.0, 10.0, 100.0])
 
 
 def build_props(base_name, elastic, gammas, taus):
@@ -77,7 +89,7 @@ def simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus):
         step.timeEnd = float(t[i])
         step.dTStart = dt
         step.dTMax = dt
-        step.dTMin = dt / 50
+        step.dTMin = dt / 50.0
         step.maxIncrements = 30
         step.isGradUComponentControlled = qm.IS_GRADU_CONTROLLED
         step.isStressComponentControlled = qm.IS_STRESS_CONTROLLED
@@ -99,12 +111,7 @@ def simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus):
     return result
 
 
-def fit_dma_prony(mat, n_terms=6):
-    """
-    Fit an N-term discrete Prony series to the DMA storage modulus master curve:
-      E'(omega) = E_inf + sum_{i=1}^N E_i * (omega * tau_i)^2 / (1 + (omega * tau_i)^2)
-    using adaptive logarithmic windowing over the observation domain across qualifying replicates.
-    """
+def load_dma_data(mat):
     samples = QUALIFYING_DMA_SAMPLES[mat]
     if isinstance(samples, str):
         samples = [samples]
@@ -128,18 +135,25 @@ def fit_dma_prony(mat, n_terms=6):
         dfs.append(d)
 
     df = pd.concat(dfs, ignore_index=True)
-
-    # Window covering relevant room-temperature frequency range
     f_min = max(df["reduced_freq_hz"].min(), 1e-5)
     f_max = min(max(df["reduced_freq_hz"].min() * 1e7, 1e2), 1e4)
     sub = df[(df["reduced_freq_hz"] >= f_min) & (df["reduced_freq_hz"] <= f_max)].copy()
-    if len(sub) < 3 * n_terms:
+    if len(sub) < 18:
         sub = df.iloc[:min(len(df), 50)].copy()
 
     sub = sub.sort_values("reduced_freq_hz")
     freq = sub["reduced_freq_hz"].to_numpy()
     omega = 2 * np.pi * freq
     E_prime = sub["E_prime_MPa"].to_numpy()
+    return freq, omega, E_prime
+
+
+def fit_dma_prony(mat, n_terms=6):
+    """
+    Fit an N-term discrete Prony series to the DMA storage modulus master curve:
+      E'(omega) = E_inf + sum_{i=1}^N E_i * (omega * tau_i)^2 / (1 + (omega * tau_i)^2)
+    """
+    freq, omega, E_prime = load_dma_data(mat)
 
     t_min = 1.0 / omega.max()
     t_max = 1.0 / omega.min()
@@ -178,11 +192,14 @@ def fit_dma_prony(mat, n_terms=6):
     taus = taus[idx]
     E = E[idx]
 
-    fit_info = {
+    pred = prony_eval(p, omega)
+    rmse_pct = 100 * np.sqrt(np.mean(((pred - E_prime) / E_prime) ** 2))
+
+    return {
         "freq": freq,
         "omega": omega,
         "E_prime_data": E_prime,
-        "E_prime_fit": prony_eval(p, omega),
+        "E_prime_fit": pred,
         "E0": E0,
         "E_inf": E_inf,
         "gammas": gammas,
@@ -190,15 +207,65 @@ def fit_dma_prony(mat, n_terms=6):
         "g_inf": 1.0 - sum(gammas),
         "E_terms": E,
         "n_terms": n_terms,
+        "rmse_pct": rmse_pct,
     }
-    return fit_info
 
 
-def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="fast"):
+def fit_dma_fractional(mat):
+    """
+    Fit Marmot's 5-mode continuous fractional power-law spectrum to the DMA storage modulus:
+      E'(omega) = E0 * [ g_inf + sum_{m=0}^4 gamma_m * (omega * tau_m)^2 / (1 + (omega * tau_m)^2) ]
+    where tau_m = tau0 * [0.01, 0.1, 1.0, 10.0, 100.0],
+          weights_m = factors^(-alpha),
+          gamma_m = (1 - g_inf) * weights_m / sum(weights_m).
+    """
+    freq, omega, E_prime = load_dma_data(mat)
+
+    def model(p, w):
+        E0, alpha, tau0, g_inf = p
+        weights = FACTORS_FS ** (-alpha)
+        gamma = (1.0 - g_inf) * (weights / np.sum(weights))
+        taus = tau0 * FACTORS_FS
+        pred = g_inf * np.ones_like(w)
+        for g, t in zip(gamma, taus):
+            w2t2 = (w * t) ** 2
+            pred += g * (w2t2 / (1.0 + w2t2))
+        return E0 * pred
+
+    def resid(p):
+        return np.log10(model(p, omega)) - np.log10(E_prime)
+
+    e_max = E_prime.max()
+    e_min = E_prime.min()
+    x0 = [e_max, 0.3, 1.0, max(e_min / e_max, 0.01)]
+    lb = [1e-2, 0.01, 1e-5, 0.001]
+    ub = [1e5, 0.99, 1e4, 0.99]
+
+    res = least_squares(resid, x0, bounds=(lb, ub), ftol=1e-9, xtol=1e-9)
+    E0, alpha, tau0, g_inf = res.x
+    pred = model(res.x, omega)
+    rmse_pct = 100 * np.sqrt(np.mean(((pred - E_prime) / E_prime) ** 2))
+
+    return {
+        "freq": freq,
+        "omega": omega,
+        "E_prime_data": E_prime,
+        "E_prime_fit": pred,
+        "E0": E0,
+        "E_inf": E0 * g_inf,
+        "alpha": alpha,
+        "tau0": tau0,
+        "g_inf": g_inf,
+        "rmse_pct": rmse_pct,
+        "model_func": model,
+        "params": res.x,
+    }
+
+
+def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="slow"):
     """
     Fit Mooney-Rivlin parameters (C1, C2) on the ramp phase of a single rate group,
     keeping DMA-derived (gammas, taus) fixed.
-    Uses constant mean strain rate over the loading ramp.
     """
     cfg = MATERIALS[mat]
     test_id = cfg["rate_groups"][cal_rate_group][0]
@@ -235,10 +302,45 @@ def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="fast"):
     return C1, C2, test_id, t_ramp, stretch_ramp, stress_ramp
 
 
+def fit_fs_neo_hooke_on_single_ramp(mat, alpha, tau0, g_inf, cal_rate_group="slow"):
+    """
+    Fit Neo-Hookean base parameter C1 for Fractional Schapery on the ramp phase of a single rate group,
+    keeping DMA-derived (alpha, tau0, g_inf) fixed and physical bulk modulus from Poisson's ratio.
+    """
+    cfg = MATERIALS[mat]
+    nu = POISSON_RATIOS.get(mat, 0.49)
+    test_id = cfg["rate_groups"][cal_rate_group][0]
+    df = load(cfg, mat, test_id)
+    t_ds, strain_ds, stress_ds = downsample_for_fit(df, n_ramp=40, n_hold=10)
+    _, ramp_end = find_ramp_bounds(df["position_mm"])
+    t_ramp_end = df["time_s"].iloc[ramp_end]
+    ramp_mask = t_ds <= t_ramp_end
+
+    t_ramp = t_ds[ramp_mask]
+    peak_strain = df["strain"].iloc[ramp_end]
+    mean_strain_rate = peak_strain / t_ramp_end
+    strain_sim_ramp = mean_strain_rate * t_ramp
+    stretch_ramp = 1.0 + strain_sim_ramp
+    stress_ramp = stress_ds[ramp_mask]
+
+    peak_stress = stress_ramp.max()
+
+    def resid(x):
+        C1 = x[0]
+        try:
+            pred = sim_fs(t_ramp, stretch_ramp, "NeoHooke", C1, 0.0, 0.0, alpha, tau0, g_inf, 0.0, 0.0, 0.0, nu=nu)
+            return (pred - stress_ramp) / peak_stress
+        except Exception:
+            return np.ones_like(stress_ramp) * 10.0
+
+    G_est = peak_stress / max(stretch_ramp.max() - 1.0, 1e-4) / 3.0
+    res = least_squares(resid, [max(G_est, 1.0)], bounds=([1e-3], [1e4]), method="trf", xtol=1e-6, ftol=1e-6)
+    return res.x[0], test_id, t_ramp, stretch_ramp, stress_ramp
+
+
 def simulate_all_rates(mat, C1, C2, gammas, taus):
     """
-    Simulate all rate groups across both ramp and hold using the calibrated parameters.
-    Uses constant mean strain rate during loading ramp and holds peak strain constant during hold.
+    Simulate all rate groups across both ramp and hold using calibrated QLV parameters.
     """
     cfg = MATERIALS[mat]
     results = {}
@@ -253,7 +355,6 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
         peak_strain = df["strain"].iloc[ramp_end]
         mean_strain_rate = peak_strain / t_ramp_end
 
-        # Idealized strain: linear ramp with mean strain rate, constant peak strain in hold
         strain_sim = np.where(is_ramp, mean_strain_rate * t_ds, peak_strain)
         stretch_sim = 1.0 + strain_sim
 
@@ -268,12 +369,6 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
         rmse_hold = np.sqrt(np.mean((pred[~is_ramp] - stress_ds[~is_ramp]) ** 2))
         rmse_hold_pct = 100.0 * rmse_hold / stress_ds.max()
 
-        # Dense smooth ramp simulation on clean linear strain for clean plotting in stress-strain panel
-        t_ramp_clean = np.linspace(0, t_ramp_end, 50)
-        strain_clean = np.linspace(0, peak_strain, 50)
-        stretch_clean = 1.0 + strain_clean
-        pred_clean = simulate_once(t_ramp_clean, stretch_clean, "MooneyRivlin", C1, C2, 0.0, gammas, taus)
-
         results[rg] = {
             "test_id": test_id,
             "t": t_ds,
@@ -283,8 +378,6 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
             "stress_exp": stress_ds,
             "stress_pred": pred,
             "is_ramp": is_ramp,
-            "strain_clean": strain_clean,
-            "pred_clean": pred_clean,
             "peak_exp": stress_ds.max(),
             "peak_pred": pred.max(),
             "rmse_total": rmse_total,
@@ -297,35 +390,92 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
     return results
 
 
-def run_material_pipeline(mat, cal_rate_group="fast", n_terms=6):
+def simulate_fs_all_rates(mat, C1, alpha, tau0, g_inf):
+    """
+    Simulate all rate groups across both ramp and hold using calibrated Fractional Schapery parameters.
+    """
+    cfg = MATERIALS[mat]
+    nu = POISSON_RATIOS.get(mat, 0.49)
+    results = {}
+    for rg, ids in cfg["rate_groups"].items():
+        test_id = ids[0]
+        df = load(cfg, mat, test_id)
+        t_ds, strain_ds, stress_ds = downsample_for_fit(df, n_ramp=40, n_hold=60)
+        _, ramp_end = find_ramp_bounds(df["position_mm"])
+        t_ramp_end = df["time_s"].iloc[ramp_end]
+        is_ramp = t_ds <= t_ramp_end
+        peak_strain = df["strain"].iloc[ramp_end]
+        mean_strain_rate = peak_strain / t_ramp_end
+        strain_sim = np.where(is_ramp, mean_strain_rate * t_ds, peak_strain)
+        stretch_sim = 1.0 + strain_sim
+
+        pred = sim_fs(t_ds, stretch_sim, "NeoHooke", C1, 0.0, 0.0, alpha, tau0, g_inf, 0.0, 0.0, 0.0, nu=nu)
+        rmse_total = np.sqrt(np.mean((pred - stress_ds) ** 2))
+        rmse_pct = 100.0 * rmse_total / stress_ds.max()
+
+        rmse_ramp = np.sqrt(np.mean((pred[is_ramp] - stress_ds[is_ramp]) ** 2))
+        rmse_ramp_pct = 100.0 * rmse_ramp / stress_ds[is_ramp].max()
+
+        rmse_hold = np.sqrt(np.mean((pred[~is_ramp] - stress_ds[~is_ramp]) ** 2))
+        rmse_hold_pct = 100.0 * rmse_hold / stress_ds.max()
+
+        results[rg] = {
+            "test_id": test_id,
+            "t": t_ds,
+            "strain": strain_ds,
+            "stretch": stretch_sim,
+            "strain_sim": strain_sim,
+            "stress_exp": stress_ds,
+            "stress_pred": pred,
+            "is_ramp": is_ramp,
+            "peak_exp": stress_ds.max(),
+            "peak_pred": pred.max(),
+            "rmse_total": rmse_total,
+            "rmse_pct": rmse_pct,
+            "rmse_ramp": rmse_ramp,
+            "rmse_ramp_pct": rmse_ramp_pct,
+            "rmse_hold": rmse_hold,
+            "rmse_hold_pct": rmse_hold_pct,
+        }
+    return results
+
+
+def run_material_pipeline(mat, cal_rate_group="slow", n_terms=6):
     print(f"\n==================================================")
-    print(f" Running DMA -> QLV Prediction Pipeline for {mat} ({n_terms} Prony terms)")
+    print(f" Running DMA Cross-Modality Calibration: {mat}")
     print(f"==================================================")
 
+    # 1. DMA Fits
     dma_fit = fit_dma_prony(mat, n_terms=n_terms)
+    dma_fs = fit_dma_fractional(mat)
     gammas = dma_fit["gammas"]
     taus = dma_fit["taus"]
-    print(f"\n[1] DMA Prony Calibration (T_ref = 20 C, {n_terms} terms):")
-    print(f"    E0 = {dma_fit['E0']:.1f} MPa, E_inf = {dma_fit['E_inf']:.1f} MPa (g_inf = {dma_fit['g_inf']:.3f})")
-    for i, (g, t, e) in enumerate(zip(gammas, taus, dma_fit["E_terms"]), 1):
-        print(f"    Mode {i}: tau = {t:10.4e} s, gamma = {g:6.4f} (E = {e:7.1f} MPa)")
 
-    print(f"\n[2] Single-Ramp Mooney-Rivlin Calibration (Rate: '{cal_rate_group}'):")
-    C1, C2, cal_test_id, t_ramp, str_ramp, s_ramp = fit_mooney_rivlin_on_single_ramp(
+    print(f"\n[1] DMA Viscoelastic Spectrum Calibration (T_ref = 20 C):")
+    print(f"    - Generalized Maxwell ({n_terms} Prony modes): E0 = {dma_fit['E0']:.1f} MPa, E_inf = {dma_fit['E_inf']:.1f} MPa (RMSE = {dma_fit['rmse_pct']:.2f}%)")
+    print(f"    - Fractional Schapery (continuous): alpha = {dma_fs['alpha']:.3f}, tau0 = {dma_fs['tau0']:.2e} s, g_inf = {dma_fs['g_inf']:.3f} (RMSE = {dma_fs['rmse_pct']:.2f}%)")
+
+    # 2. Single-Ramp Calibration
+    print(f"\n[2] Single-Ramp Hyperelastic Calibration (Rate: '{cal_rate_group}'):")
+    C1_qlv, C2_qlv, cal_test_id, t_ramp, str_ramp, s_ramp = fit_mooney_rivlin_on_single_ramp(
         mat, gammas, taus, cal_rate_group=cal_rate_group
     )
-    print(f"    Calibrated test: {mat}-{cal_test_id} ramp (duration = {t_ramp[-1]:.3f} s, peak = {s_ramp.max():.2f} MPa)")
-    print(f"    Fitted parameters: C1 = {C1:.3f} MPa, C2 = {C2:.3f} MPa (K = {100.0*C1:.1f} MPa)")
-    print(f"    Instantaneous Young's modulus E_inst = 6*(C1+C2) = {6.0*(C1+C2):.1f} MPa")
+    C1_fs, _, _, _, _ = fit_fs_neo_hooke_on_single_ramp(
+        mat, dma_fs["alpha"], dma_fs["tau0"], dma_fs["g_inf"], cal_rate_group=cal_rate_group
+    )
+    print(f"    - QLV (Mooney-Rivlin)      : C1 = {C1_qlv:.2f} MPa, C2 = {C2_qlv:.2f} MPa (E_inst = {6.0*(C1_qlv+C2_qlv):.1f} MPa)")
+    print(f"    - Fract. Schapery (Neo-Hook): C1 = {C1_fs:.2f} MPa")
 
-    print(f"\n[3] Blind Forward Prediction Across All Rate Groups:")
-    sim_results = simulate_all_rates(mat, C1, C2, gammas, taus)
-    for rg, res in sim_results.items():
+    # 3. Simulate All Rates
+    print(f"\n[3] Blind Predictions & Evaluations Across Rates:")
+    sim_results = simulate_all_rates(mat, C1_qlv, C2_qlv, gammas, taus)
+    fs_sim_results = simulate_fs_all_rates(mat, C1_fs, dma_fs["alpha"], dma_fs["tau0"], dma_fs["g_inf"])
+
+    for rg in ["very slow", "slow", "fast"]:
         is_cal = " [CALIBRATION RAMP]" if rg == cal_rate_group else " [BLIND PREDICTION]"
-        print(f"    Rate '{rg:9s}' (test {res['test_id']:2d}){is_cal}:")
-        print(f"      Peak stress: exp = {res['peak_exp']:6.2f} MPa, pred = {res['peak_pred']:6.2f} MPa")
-        print(f"      RMSE total : {res['rmse_total']:6.3f} MPa ({res['rmse_pct']:5.2f}% of peak)")
-        print(f"      RMSE hold  : {res['rmse_hold']:6.3f} MPa ({res['rmse_hold_pct']:5.2f}% of peak)")
+        q_e = sim_results[rg]["rmse_pct"]
+        f_e = fs_sim_results[rg]["rmse_pct"]
+        print(f"    Rate '{rg:9s}'{is_cal}: QLV RMSE = {q_e:5.1f}% | Fract. Schapery RMSE = {f_e:5.1f}%")
 
     joint_params = None
     baseline_csv = PARAMS_DIR / "qlv_marmot_params.csv"
@@ -345,97 +495,20 @@ def run_material_pipeline(mat, cal_rate_group="fast", n_terms=6):
     if joint_params is not None:
         joint_sim = simulate_all_rates(mat, joint_params["C1"], joint_params["C2"], joint_params["gammas"], joint_params["taus"])
 
-    plot_results(mat, dma_fit, sim_results, joint_sim, cal_rate_group, C1, C2)
-
     return {
         "mat": mat,
         "dma_fit": dma_fit,
-        "C1": C1,
-        "C2": C2,
-        "gammas": gammas,
-        "taus": taus,
+        "dma_fs": dma_fs,
+        "C1": C1_qlv,
+        "C2": C2_qlv,
+        "C1_fs": C1_fs,
         "sim_results": sim_results,
+        "fs_sim_results": fs_sim_results,
         "joint_sim": joint_sim,
     }
 
 
-def plot_results(mat, dma_fit, sim_results, joint_sim, cal_rate_group, C1, C2):
-    fig, axes = plt.subplots(1, 3, figsize=(22 / 2.54, 7.5 / 2.54))
-
-    # --- Panel (a): DMA Master Curve & Prony Fit ---
-    ax_dma = axes[0]
-    w_dense = np.logspace(np.log10(dma_fit["omega"].min()) - 0.5, np.log10(dma_fit["omega"].max()) + 0.5, 200)
-    freq_dense = w_dense / (2 * np.pi)
-    E_dense = dma_fit["E_inf"] * np.ones_like(w_dense)
-    for g, t in zip(dma_fit["gammas"], dma_fit["taus"]):
-        w2t2 = (w_dense * t) ** 2
-        E_dense += (g * dma_fit["E0"]) * (w2t2 / (1.0 + w2t2))
-
-    ax_dma.loglog(dma_fit["freq"], dma_fit["E_prime_data"], "o", markersize=3.5, color="gray", alpha=0.7, label="DMA data ($20^\\circ$C)")
-    ax_dma.loglog(freq_dense, E_dense, "-", color="black", linewidth=1.5, label=f"{dma_fit['n_terms']}-term Prony fit")
-    ax_dma.set_xlabel("Reduced frequency $f_r$ (Hz)")
-    ax_dma.set_ylabel("Storage modulus $E'$ (MPa)")
-    ax_dma.set_title(f"(a) DMA Master Curve: {mat}", fontsize=9)
-    ax_dma.legend(loc="lower right", fontsize=7.5)
-
-    # --- Panel (b): Stress-Strain (Ramp Phase) ---
-    ax_ss = axes[1]
-    rate_colors = {"very slow": colors[0], "slow": colors[1], "fast": colors[2]}
-    for rg in ["very slow", "slow", "fast"]:
-        res = sim_results[rg]
-        ramp_mask = res["is_ramp"]
-        c = rate_colors[rg]
-        # Measured experimental points
-        ax_ss.plot(res["strain"][ramp_mask] * 100, res["stress_exp"][ramp_mask], "o", markersize=2.5, color=c, alpha=0.45)
-        # DMA QLV prediction along smooth linear strain trajectory
-        label = f"{rg} (pred)" if rg != cal_rate_group else f"{rg} (cal ramp)"
-        lw = 1.8 if rg == cal_rate_group else 1.3
-        ax_ss.plot(res["strain_clean"] * 100, res["pred_clean"], linestyle="-", color=c, linewidth=lw, label=label)
-        # Baseline joint fit if available
-        if joint_sim is not None:
-            ax_ss.plot(joint_sim[rg]["strain_clean"] * 100, joint_sim[rg]["pred_clean"], ":", color=c, linewidth=1.0)
-
-    ax_ss.set_xlabel("Engineering strain $\\varepsilon$ (\\%)")
-    ax_ss.set_ylabel("Engineering stress $\\sigma$ (MPa)")
-    ax_ss.set_title(f"(b) Tensile Ramps: {mat}", fontsize=9)
-    ax_ss.legend(loc="upper left", fontsize=7.0)
-
-    # --- Panel (c): Stress-Time (Ramp + Hold Relaxation) ---
-    ax_st = axes[2]
-    for rg in ["very slow", "slow", "fast"]:
-        res = sim_results[rg]
-        c = rate_colors[rg]
-        ax_st.plot(res["t"], res["stress_exp"], "o", markersize=2.0, color=c, alpha=0.4)
-        ax_st.plot(res["t"], res["stress_pred"], "-", color=c, linewidth=1.4)
-        if joint_sim is not None:
-            ax_st.plot(joint_sim[rg]["t"], joint_sim[rg]["stress_pred"], ":", color=c, linewidth=1.0)
-
-    custom_lines = [
-        plt.Line2D([0], [0], color="black", marker="o", markersize=3, linestyle="none", alpha=0.6, label="Measured test"),
-        plt.Line2D([0], [0], color="black", linestyle="-", linewidth=1.5, label="DMA QLV prediction"),
-    ]
-    if joint_sim is not None:
-        custom_lines.append(plt.Line2D([0], [0], color="black", linestyle=":", linewidth=1.2, label="Joint-fit baseline"))
-
-    ax_st.set_xscale("log")
-    ax_st.set_xlabel("Time $t$ (s)")
-    ax_st.set_ylabel("Engineering stress $\\sigma$ (MPa)")
-    ax_st.set_title(f"(c) Stress Relaxation (600 s): {mat}", fontsize=9)
-    ax_st.legend(handles=custom_lines, loc="upper right", fontsize=7.0)
-
-    fig.tight_layout()
-    out_pdf = OUTPUT_DIR / f"qlv_dma_prediction_{mat}.pdf"
-    out_png = OUTPUT_DIR / f"qlv_dma_prediction_{mat}.png"
-    fig.savefig(out_pdf, dpi=300)
-    fig.savefig(out_png, dpi=300)
-    plt.close(fig)
-    print(f"\n[Saved figure]: {out_pdf}")
-
-
 def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
-    import seaborn as sns
-    from matplotlib.lines import Line2D
-
     # Setup publication theme
     sns.set_theme(
         context="paper",
@@ -458,33 +531,34 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         "A100V0": palette[4],
     }
     mat_order = ["A0V100", "A25V75", "A50V50", "A75V25", "A100V0"]
-    mat_labels = {
-        "A0V100": "A0V100 (0\\% AB)",
-        "A25V75": "A25V75 (25\\% AB)",
-        "A50V50": "A50V50 (50\\% AB)",
-        "A75V25": "A75V25 (75\\% AB)",
-        "A100V0": "A100V0 (100\\% AB)",
-    }
     rate_groups = ["very slow", "slow", "fast"]
 
     fig, axes = plt.subplots(5, 4, figsize=(19 / 2.54, 19.5 / 2.54))
 
     for r, mat in enumerate(mat_order):
         res = all_results[mat]
-        dma_fit = res["dma_fit"]
+        dma_p = res["dma_fit"]
+        dma_fs = res["dma_fs"]
         color = mat_colors[mat]
 
         # Col 0: DMA Master Curve
         ax0 = axes[r, 0]
-        w_dense = np.logspace(np.log10(dma_fit["omega"].min()) - 0.5, np.log10(dma_fit["omega"].max()) + 0.5, 200)
+        w_dense = np.logspace(np.log10(dma_p["omega"].min()) - 0.5, np.log10(dma_p["omega"].max()) + 0.5, 200)
         freq_dense = w_dense / (2 * np.pi)
-        E_dense = dma_fit["E_inf"] * np.ones_like(w_dense)
-        for g, t in zip(dma_fit["gammas"], dma_fit["taus"]):
-            w2t2 = (w_dense * t) ** 2
-            E_dense += (g * dma_fit["E0"]) * (w2t2 / (1.0 + w2t2))
 
-        ax0.loglog(dma_fit["freq"], dma_fit["E_prime_data"], "o", markersize=2.0, color="gray", alpha=0.55, zorder=2)
-        ax0.loglog(freq_dense, E_dense, "-", color=color, linewidth=1.4, zorder=3)
+        # Generalized Maxwell Prony curve
+        E_prony = dma_p["E_inf"] * np.ones_like(w_dense)
+        for g, t in zip(dma_p["gammas"], dma_p["taus"]):
+            w2t2 = (w_dense * t) ** 2
+            E_prony += (g * dma_p["E0"]) * (w2t2 / (1.0 + w2t2))
+
+        # Fractional Schapery curve
+        E_fs = dma_fs["model_func"](dma_fs["params"], w_dense)
+
+        ax0.loglog(dma_p["freq"], dma_p["E_prime_data"], "o", markersize=2.0, color="gray", alpha=0.55, zorder=1)
+        ax0.loglog(freq_dense, E_prony, "-", color=color, linewidth=1.4, zorder=3)
+        ax0.loglog(freq_dense, E_fs, "-.", color="black", linewidth=1.2, zorder=2)
+
         disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(mat, mat)
         ax0.set_ylabel(f"\\textbf{{{disp_mat}}}\nStorage $E'$ (MPa)", fontsize=8.0)
         if r == 4:
@@ -492,7 +566,8 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         ax0.grid(True, alpha=0.3, linewidth=0.5)
         if r == 0:
             ax0.set_title(r"(a) DMA Master ($20^\circ$C)", fontsize=8.5, fontweight="bold")
-        ax0.text(0.06, 0.08, f"$E_0={dma_fit['E0']:.0f}$", transform=ax0.transAxes, fontsize=6.8,
+        badge_text = f"$E_0={dma_p['E0']:.0f}$ MPa\n$\\alpha={dma_fs['alpha']:.3f}$"
+        ax0.text(0.06, 0.08, badge_text, transform=ax0.transAxes, fontsize=6.3,
                  bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.75, edgecolor="none"))
 
         # Max peak stress across rates for consistent y-limits
@@ -502,16 +577,19 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         # Cols 1, 2, 3: Rates
         for c_idx, rg in enumerate(rate_groups, start=1):
             ax = axes[r, c_idx]
-            sres = res["sim_results"][rg]
+            q_res = res["sim_results"][rg]
+            fs_res = res["fs_sim_results"][rg]
             jsim = res["joint_sim"][rg] if res["joint_sim"] is not None else None
 
             # Measured test curve
-            ax.plot(sres["t"], sres["stress_exp"], color="gray", linewidth=2.0, alpha=0.5, zorder=1)
-            # DMA-calibrated QLV
-            ax.plot(sres["t"], sres["stress_pred"], "-", color=color, linewidth=1.3, zorder=3)
+            ax.plot(q_res["t"], q_res["stress_exp"], color="gray", linewidth=2.0, alpha=0.5, zorder=1)
+            # DMA-calibrated QLV (Generalized Maxwell)
+            ax.plot(q_res["t"], q_res["stress_pred"], "-", color=color, linewidth=1.3, zorder=4)
+            # DMA-calibrated Fractional Schapery (Neo-Hookean)
+            ax.plot(fs_res["t"], fs_res["stress_pred"], "-.", color="black", linewidth=1.1, zorder=3)
             # Joint-fit baseline
             if jsim is not None:
-                ax.plot(jsim["t"], jsim["stress_pred"], ":", color="black", linewidth=0.9, zorder=2)
+                ax.plot(jsim["t"], jsim["stress_pred"], ":", color="0.4", linewidth=0.9, zorder=2)
 
             ax.set_xscale("log")
             ax.set_xlim(0.2, 650)
@@ -527,28 +605,31 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
                 ax.set_xlabel(r"Time $t$ (s)", fontsize=8.0)
 
             if r == 0:
-                col_titles = [r"(b) Very Slow ($0.017\,\mathrm{mm/s}$)",
-                              r"(c) Slow ($0.167\,\mathrm{mm/s}$)",
-                              r"(d) Fast ($1.67\,\mathrm{mm/s}$)"]
+                col_titles = [
+                    r"(b) Very Slow ($0.017\,\mathrm{mm/s}$)",
+                    r"(c) Slow ($0.167\,\mathrm{mm/s}$)",
+                    r"(d) Fast ($1.67\,\mathrm{mm/s}$)"
+                ]
                 ax.set_title(col_titles[c_idx - 1], fontsize=8.5, fontweight="bold")
 
             # Annotation badge
             is_cal = (rg == cal_rate_group)
             tag_label = "Cal. Ramp" if is_cal else "Blind Pred."
-            err_text = f"{tag_label}\nRMSE: {sres['rmse_pct']:.1f}\\%"
-            ax.text(0.95, 0.94, err_text, transform=ax.transAxes, fontsize=6.8,
+            err_text = f"{tag_label}\nGM: {q_res['rmse_pct']:.1f}\\%\nFS: {fs_res['rmse_pct']:.1f}\\%"
+            ax.text(0.95, 0.94, err_text, transform=ax.transAxes, fontsize=6.2,
                     ha="right", va="top",
                     bbox=dict(boxstyle="round,pad=0.15", facecolor="white", alpha=0.75, edgecolor="none"))
 
-    # Global legend
+    # Global legend (2 neat rows)
     legend_handles = [
         Line2D([0], [0], color="gray", linewidth=2.0, alpha=0.5, label="Measured tensile test"),
-        Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated QLV (1 ramp)"),
-        Line2D([0], [0], color="black", linestyle=":", linewidth=1.0, label="Joint 3-rate fitted baseline"),
+        Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated Generalized Maxwell (Mooney--Rivlin)"),
+        Line2D([0], [0], color="0.4", linestyle=":", linewidth=1.0, label="Joint 3-rate fitted baseline"),
+        Line2D([0], [0], color="black", linestyle="-.", linewidth=1.1, label="DMA-calibrated Fractional Schapery (Neo-Hookean)"),
     ]
-    fig.legend(handles=legend_handles, loc="upper center", ncol=3, fontsize=8.0,
-               bbox_to_anchor=(0.5, 0.995), frameon=False)
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    fig.legend(handles=legend_handles, loc="upper center", ncol=2, fontsize=7.5,
+               bbox_to_anchor=(0.5, 0.998), frameon=False)
+    fig.tight_layout(rect=[0, 0, 1, 0.955])
 
     # Save to paper figures and analysis
     paper_dir = Path(__file__).resolve().parents[4] / "paper"
@@ -569,32 +650,50 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
     # Build LaTeX Table
     table_path = paper_dir / "dma_qlv_summary_table.tex"
     table_tex = [
-        "% Auto-generated summary table for DMA-calibrated QLV model",
+        "% Auto-generated summary table for DMA-calibrated constitutive models",
         "\\begin{table}[htpb!]",
         "    \\centering",
         "    \\small",
-        "    \\caption{Cross-modality parameter calibration: Generalized-Maxwell (Mooney--Rivlin) constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$, 6 Maxwell elements) and calibrated on a single slow loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are shown for the calibration ramp and blind forward predictions across rates, compared against the jointly fitted 3-rate baseline.}",
+        "    \\caption{Cross-modality parameter calibration: constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$) and calibrated on a single slow loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are reported for the calibration ramp and blind forward predictions across rates for both Generalized Maxwell (Mooney--Rivlin base, 6 Prony modes) and Fractional Schapery (Neo-Hookean base, 5-decade fractional kernel) models.}",
         "    \\label{tab:dma-qlv-summary}",
-        "    \\begin{tabular}{lcccccccc}",
+        "    \\begin{tabular}{llcccc}",
         "        \\toprule",
-        "        Blend & DMA $E_0$ & DMA $E_\\infty$ & $C_1$ & $C_2$ & $E_{\\mathrm{inst}}$ & Very Slow RMSE & Slow (Cal) RMSE & Fast RMSE \\\\",
-        "         & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (\\si{\\mega\\pascal}) & (Blind, \\%) & (Ramp, \\%) & (Blind, \\%) \\\\",
+        "        Blend & Constitutive Model & DMA Spectrum \\& Calibrated Ramp Modulus & Very Slow & Slow (Cal Ramp) & Fast \\\\",
+        "              &                    &                                         & (Blind, \\%) & (Ramp, \\%) & (Blind, \\%) \\\\",
         "        \\midrule",
     ]
 
-    for mat in mat_order:
+    for i, mat in enumerate(mat_order):
         res = all_results[mat]
-        dma_fit = res["dma_fit"]
-        C1, C2 = res["C1"], res["C2"]
-        E_inst = 6.0 * (C1 + C2)
-        vs = res["sim_results"]["very slow"]["rmse_pct"]
-        sl = res["sim_results"]["slow"]["rmse_pct"]
-        fs = res["sim_results"]["fast"]["rmse_pct"]
-
+        dp = res["dma_fit"]
+        df = res["dma_fs"]
         disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(mat, mat)
+
+        # GM row
+        gm_vs = res["sim_results"]["very slow"]["rmse_pct"]
+        gm_sl = res["sim_results"]["slow"]["rmse_pct"]
+        gm_fs = res["sim_results"]["fast"]["rmse_pct"]
+        gm_param = f"$E_0={dp['E0']:.1f},\\, C_1={res['C1']:.2f},\\, C_2={res['C2']:.2f}\\,\\text{{MPa}}$"
+
+        # FS row
+        fs_vs = res["fs_sim_results"]["very slow"]["rmse_pct"]
+        fs_sl = res["fs_sim_results"]["slow"]["rmse_pct"]
+        fs_fs = res["fs_sim_results"]["fast"]["rmse_pct"]
+        if df["tau0"] < 0.1:
+            m, exp = f"{df['tau0']:.2e}".split("e")
+            tau_str = f"{m}\times 10^{{{int(exp)}}}"
+        else:
+            tau_str = f"{df['tau0']:.1f}"
+        fs_param = f"$\\alpha={df['alpha']:.3f},\\, \\tau_0={tau_str}\\,\\text{{s}},\\, C_1={res['C1_fs']:.2f}\\,\\text{{MPa}}$"
+
         table_tex.append(
-            f"        {disp_mat} & {dma_fit['E0']:.1f} & {dma_fit['E_inf']:.1f} & {C1:.2f} & {C2:.2f} & {E_inst:.1f} & {vs:.1f}\\% & {sl:.1f}\\% & {fs:.1f}\\% \\\\"
+            f"        \\multirow{{2}}{{*}}{{{disp_mat}}} & Generalized Maxwell & {gm_param} & {gm_vs:.1f}\\% & {gm_sl:.1f}\\% & {gm_fs:.1f}\\% \\\\"
         )
+        table_tex.append(
+            f"                             & Fractional Schapery & {fs_param} & {fs_vs:.1f}\\% & {fs_sl:.1f}\\% & {fs_fs:.1f}\\% \\\\"
+        )
+        if i < len(mat_order) - 1:
+            table_tex.append("        \\midrule")
 
     table_tex.extend([
         "        \\bottomrule",
@@ -609,10 +708,10 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
 
 def main():
     parser = argparse.ArgumentParser(description="Predict tensile stress relaxation from DMA master curves")
-    parser.add_argument("--material", default="A25V75", choices=list(MATERIALS.keys()) + ["all"],
-                        help="Material to run (default: A25V75)")
-    parser.add_argument("--ramp-rate", default="fast", choices=["very slow", "slow", "fast"],
-                        help="Rate group used to calibrate Mooney-Rivlin (default: fast)")
+    parser.add_argument("--material", default="all", choices=list(MATERIALS.keys()) + ["all"],
+                        help="Material to run (default: all)")
+    parser.add_argument("--ramp-rate", default="slow", choices=["very slow", "slow", "fast"],
+                        help="Rate group used to calibrate hyperelastic base (default: slow)")
     parser.add_argument("--n-terms", type=int, default=6,
                         help="Number of Prony series terms (default: 6)")
     args = parser.parse_args()
@@ -627,6 +726,7 @@ def main():
         for rg, sres in res["sim_results"].items():
             all_summary.append({
                 "material": mat,
+                "model": "GeneralizedMaxwell",
                 "n_terms": args.n_terms,
                 "cal_ramp_rate": args.ramp_rate,
                 "evaluated_rate": rg,
@@ -636,6 +736,20 @@ def main():
                 "rmse_total_mpa": sres["rmse_total"],
                 "rmse_total_pct": sres["rmse_pct"],
                 "rmse_hold_pct": sres["rmse_hold_pct"],
+            })
+        for rg, fres in res["fs_sim_results"].items():
+            all_summary.append({
+                "material": mat,
+                "model": "FractionalSchapery",
+                "n_terms": 5,
+                "cal_ramp_rate": args.ramp_rate,
+                "evaluated_rate": rg,
+                "is_cal_ramp": (rg == args.ramp_rate),
+                "peak_exp_mpa": fres["peak_exp"],
+                "peak_pred_mpa": fres["peak_pred"],
+                "rmse_total_mpa": fres["rmse_total"],
+                "rmse_total_pct": fres["rmse_pct"],
+                "rmse_hold_pct": fres["rmse_hold_pct"],
             })
 
     summary_df = pd.DataFrame(all_summary)
