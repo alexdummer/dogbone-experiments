@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""Generate publication-ready 5x3 validation grid comparing all 3 material models:
+- Generalized-Maxwell / QLV-Marmot (Mooney-Rivlin)
+- Bergström-Boyce (Arruda-Boyce)
+- Fractional Schapery (Mooney-Rivlin)
+against measured tensile stress-relaxation data with embedded loading-ramp insets.
+"""
+
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path('/home/alex/projects/3D-printing/dogbone-experiments')
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "bergstrom-boyce"))
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "qlv-marmot"))
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "fractional-schapery"))
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "1d-qlv"))
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "prf"))
+sys.path.insert(0, str(REPO_ROOT / "analysis"))
+
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import numpy as np
+import pandas as pd
+
+from plotstyle import colors, figsize_double
+from fit_bb_model import BASE, MATERIALS, PLACEHOLDER_MATERIALS, validate_bb, validate_bb_ramp
+from fit_qlv_marmot_model import validate as validate_qlv, validate_ramp as validate_qlv_ramp
+from fit_fractional_schapery_model import validate as validate_fs, validate_ramp as validate_fs_ramp
+from fit_qlv_model import load, mean_strain_rates
+
+PARAMS_DIR = REPO_ROOT / "simulations" / "material-calibration" / "parameters"
+RATE_GROUPS = ["very slow", "slow", "fast"]
+
+LAYOUT_CFG = {
+    "A0V100": {
+        "inset": [0.55, 0.10, 0.39, 0.38],
+        "rate": (0.96, 0.96, "right", "top"),
+        "ylim": (0, 18.5),
+    },
+    "A25V75": {
+        "inset": [0.55, 0.54, 0.39, 0.38],
+        "rate": (0.04, 0.96, "left", "top"),
+        "ylim": (0, 31.0),
+    },
+    "A50V50": {
+        "inset": [0.55, 0.52, 0.39, 0.40],
+        "rate": (0.04, 0.96, "left", "top"),
+        "ylim": (0, 20.0),
+    },
+    "A75V25": {
+        "inset": [0.55, 0.52, 0.39, 0.40],
+        "rate": (0.04, 0.96, "left", "top"),
+        "ylim": (0, 6.2),
+    },
+    "A100V0": {
+        "inset": [0.55, 0.52, 0.39, 0.40],
+        "rate": (0.04, 0.96, "left", "top"),
+        "ylim": (0, 0.85),
+    },
+}
+
+
+def load_parameters():
+    params_qlv = pd.read_csv(PARAMS_DIR / "qlv_marmot_params.csv")
+    params_bb = pd.read_csv(PARAMS_DIR / "bb_params.csv")
+    params_fs = pd.read_csv(PARAMS_DIR / "fractional_schapery_params.csv")
+    return params_qlv, params_bb, params_fs
+
+
+def simulate_all():
+    params_qlv, params_bb, params_fs = load_parameters()
+    qlv_time_data = {}
+    qlv_ramp_data = {}
+    bb_time_data = {}
+    bb_ramp_data = {}
+    fs_time_data = {}
+    fs_ramp_data = {}
+
+    for material, cfg in MATERIALS.items():
+        print(f"Simulating {material}...", flush=True)
+
+        # 1. QLV-Marmot (Mooney-Rivlin)
+        r_qlv = params_qlv[
+            (params_qlv["material"] == material) & (params_qlv["hyperelastic_base"] == "MooneyRivlin")
+        ].iloc[0]
+        _, qlv_time = validate_qlv(
+            material,
+            cfg,
+            "MooneyRivlin",
+            r_qlv["C1"],
+            r_qlv["C2"],
+            r_qlv["C3"],
+            [r_qlv["gamma1"], r_qlv["gamma2"], r_qlv["gamma3"]],
+            [r_qlv["tau1"], r_qlv["tau2"], r_qlv["tau3"]],
+        )
+        qlv_ramp = validate_qlv_ramp(
+            material,
+            cfg,
+            "MooneyRivlin",
+            r_qlv["C1"],
+            r_qlv["C2"],
+            r_qlv["C3"],
+            [r_qlv["gamma1"], r_qlv["gamma2"], r_qlv["gamma3"]],
+            [r_qlv["tau1"], r_qlv["tau2"], r_qlv["tau3"]],
+        )
+        qlv_time_data[material] = qlv_time
+        qlv_ramp_data[material] = qlv_ramp
+
+        # 2. Bergström-Boyce (Arruda-Boyce)
+        r_bb = params_bb[
+            (params_bb["material"] == material) & (params_bb["hyperelastic_base"] == "ArrudaBoyce")
+        ].iloc[0]
+        _, bb_time = validate_bb(
+            material,
+            cfg,
+            "ArrudaBoyce",
+            (r_bb["A1"], r_bb["A2"], r_bb["A3"]),
+            (r_bb["B1"], r_bb["B2"], r_bb["B3"]),
+            r_bb["c1"],
+            r_bb["c2"],
+            r_bb["c3"],
+        )
+        bb_ramp = validate_bb_ramp(
+            material,
+            cfg,
+            "ArrudaBoyce",
+            (r_bb["A1"], r_bb["A2"], r_bb["A3"]),
+            (r_bb["B1"], r_bb["B2"], r_bb["B3"]),
+            r_bb["c1"],
+            r_bb["c2"],
+            r_bb["c3"],
+        )
+        bb_time_data[material] = bb_time
+        bb_ramp_data[material] = bb_ramp
+
+        # 3. Fractional Schapery (Mooney-Rivlin base)
+        r_fs = params_fs[
+            (params_fs["material"] == material) & (params_fs["hyperelastic_base"] == "MooneyRivlin")
+        ].iloc[0]
+        _, fs_time = validate_fs(
+            material,
+            cfg,
+            "MooneyRivlin",
+            r_fs["C1"],
+            r_fs["C2"],
+            r_fs["C3"],
+            r_fs["alpha"],
+            r_fs["tau0"],
+            r_fs["g_inf"],
+            r_fs["a1"],
+            r_fs["a2"],
+            r_fs["b_S"],
+        )
+        fs_ramp = validate_fs_ramp(
+            material,
+            cfg,
+            "MooneyRivlin",
+            r_fs["C1"],
+            r_fs["C2"],
+            r_fs["C3"],
+            r_fs["alpha"],
+            r_fs["tau0"],
+            r_fs["g_inf"],
+            r_fs["a1"],
+            r_fs["a2"],
+            r_fs["b_S"],
+        )
+        fs_time_data[material] = fs_time
+        fs_ramp_data[material] = fs_ramp
+
+    return qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, fs_time_data, fs_ramp_data
+
+
+def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, fs_time_data, fs_ramp_data):
+    materials = list(MATERIALS) + PLACEHOLDER_MATERIALS
+    strain_rates = mean_strain_rates()
+
+    height_ratios = [1.0] * len(materials)
+    MAX_TOTAL_HEIGHT_IN = 8.5
+    per_row_scale = min(0.8, MAX_TOTAL_HEIGHT_IN / (figsize_double[1] * sum(height_ratios)))
+    fig, axes = plt.subplots(
+        len(materials),
+        3,
+        figsize=(figsize_double[0], figsize_double[1] * per_row_scale * sum(height_ratios)),
+        sharey="row",
+        sharex=True,
+        gridspec_kw={"height_ratios": height_ratios},
+    )
+
+    for row, material in enumerate(materials):
+        cfg = LAYOUT_CFG[material]
+        for col, rate_group in enumerate(RATE_GROUPS):
+            ax = axes[row, col]
+            color = colors[col]
+
+            # 1. Main relaxation curve
+            t_full, measured, t_ds_qlv, pred_qlv = qlv_time_data[material][rate_group]
+            _, _, t_ds_bb, pred_bb = bb_time_data[material][rate_group]
+            _, _, t_ds_fs, pred_fs = fs_time_data[material][rate_group]
+
+            # Measured curve (faded grey)
+            if measured is not None:
+                ax.plot(t_full, measured, color="0.4", linewidth=2.0, alpha=0.35, zorder=1)
+
+            # Generalized Maxwell (Mooney-Rivlin): solid line with circle markers
+            ax.plot(
+                t_ds_qlv,
+                pred_qlv,
+                color=color,
+                linewidth=1.0,
+                linestyle="-",
+                marker="o",
+                markersize=1.8,
+                markevery=4,
+                zorder=3,
+            )
+
+            # Bergström-Boyce (Arruda-Boyce): dashed line with triangle markers
+            ax.plot(
+                t_ds_bb,
+                pred_bb,
+                color=color,
+                linewidth=1.0,
+                linestyle="--",
+                marker="^",
+                markersize=1.8,
+                markevery=4,
+                zorder=4,
+            )
+
+            # Fractional Schapery: dash-dot line with square markers
+            ax.plot(
+                t_ds_fs,
+                pred_fs,
+                color=color,
+                linewidth=1.0,
+                linestyle="-.",
+                marker="s",
+                markersize=1.8,
+                markevery=4,
+                zorder=5,
+            )
+
+            ax.grid(True, alpha=0.3)
+
+            if row == 0:
+                ax.set_title(rate_group, fontsize=9)
+            disp_mat = {
+                "A0V100": "A0",
+                "A25V75": "A25",
+                "A50V50": "A50",
+                "A75V25": "A75",
+                "A100V0": "A100",
+            }.get(material, material)
+            if col == 0:
+                if disp_mat == "A50":
+                    ax.set_ylabel(f"{disp_mat}\nEngineering stress in MPa", fontsize=8)
+                else:
+                    ax.set_ylabel(disp_mat, fontsize=8)
+            if row == len(materials) - 1:
+                ax.set_xlabel("Time in s", fontsize=8)
+
+            rate = strain_rates.get(material, {}).get(rate_group)
+            if rate is not None:
+                lx, ly, ha, va = cfg["rate"]
+                ax.text(
+                    lx,
+                    ly,
+                    rf"$\dot\varepsilon\approx${100 * rate:.3g}\%/s",
+                    fontsize=6,
+                    ha=ha,
+                    va=va,
+                    transform=ax.transAxes,
+                    color="black",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.75),
+                )
+
+            # Explicit ylim per row for breathing room
+            ax.set_ylim(cfg["ylim"])
+
+            # 2. INSET AXIS for loading ramp stress-strain
+            rx_full, r_meas, rx_ds_qlv, r_pred_qlv = qlv_ramp_data[material][rate_group]
+            _, _, rx_ds_bb, r_pred_bb = bb_ramp_data[material][rate_group]
+            _, _, rx_ds_fs, r_pred_fs = fs_ramp_data[material][rate_group]
+
+            ax_ins = ax.inset_axes(cfg["inset"])
+            if r_meas is not None:
+                ax_ins.plot(rx_full, r_meas, color="0.4", linewidth=1.5, alpha=0.35, zorder=1)
+
+            ax_ins.plot(
+                rx_ds_qlv,
+                r_pred_qlv,
+                color=color,
+                linewidth=0.8,
+                linestyle="-",
+                marker="o",
+                markersize=1.2,
+                markevery=3,
+                zorder=3,
+            )
+            ax_ins.plot(
+                rx_ds_bb,
+                r_pred_bb,
+                color=color,
+                linewidth=0.8,
+                linestyle="--",
+                marker="^",
+                markersize=1.2,
+                markevery=3,
+                zorder=4,
+            )
+            ax_ins.plot(
+                rx_ds_fs,
+                r_pred_fs,
+                color=color,
+                linewidth=0.8,
+                linestyle="-.",
+                marker="s",
+                markersize=1.2,
+                markevery=3,
+                zorder=5,
+            )
+
+            ax_ins.set_facecolor("white")
+            ax_ins.tick_params(labelsize=4.5, pad=1, length=1.5, width=0.5)
+            ax_ins.grid(True, alpha=0.25, linewidth=0.4)
+            for spine in ax_ins.spines.values():
+                spine.set_linewidth(0.5)
+                spine.set_color("#555555")
+            ax_ins.set_xlabel(r"$\varepsilon$ (\%)", fontsize=5.0, labelpad=0.5)
+            ax_ins.set_ylabel(r"$\sigma$ (MPa)", fontsize=5.0, labelpad=0.5)
+
+    legend_handles = [
+        Line2D([0], [0], color="0.4", alpha=0.5, linewidth=2.0, label="measured"),
+        Line2D([0], [0], color="black", linestyle="-", marker="o", markersize=3.5, label="Generalized-Maxwell (Mooney-Rivlin)"),
+        Line2D([0], [0], color="black", linestyle="--", marker="^", markersize=3.5, label="Bergström-Boyce (Arruda-Boyce)"),
+        Line2D([0], [0], color="black", linestyle="-.", marker="s", markersize=3.5, label="Fractional Schapery (Mooney-Rivlin)"),
+    ]
+    fig.legend(handles=legend_handles, loc="upper center", ncol=4, fontsize=7.0, bbox_to_anchor=(0.5, 1.02), frameon=False)
+
+    fig.tight_layout()
+
+    scratch_png = Path("/home/alex/.gemini/antigravity/brain/7d08f8bf-6bf9-4623-973d-65f5d483607b/scratch/unified_validation_grid.png")
+    paper_pdf = Path("/home/alex/projects/3D-printing/paper/figures/qlv_marmot_validation_grid.pdf")
+    analysis_pdf = REPO_ROOT / "analysis" / "qlv_marmot_validation_grid.pdf"
+    sim_pdf = REPO_ROOT / "simulations" / "material-calibration" / "qlv_marmot_validation_grid.pdf"
+
+    fig.savefig(scratch_png, dpi=300, bbox_inches="tight")
+    fig.savefig(paper_pdf, bbox_inches="tight")
+    fig.savefig(analysis_pdf, bbox_inches="tight")
+    fig.savefig(sim_pdf, bbox_inches="tight")
+
+    print(f"Saved scratch png: {scratch_png}")
+    print(f"Saved paper pdf: {paper_pdf}")
+    plt.close(fig)
+
+
+def main():
+    print("=== Generating Unified 3-Model Validation Grid ===", flush=True)
+    qlv_time, qlv_ramp, bb_time, bb_ramp, fs_time, fs_ramp = simulate_all()
+    plot_unified_grid(qlv_time, qlv_ramp, bb_time, bb_ramp, fs_time, fs_ramp)
+    print("=== Done ===", flush=True)
+
+
+if __name__ == "__main__":
+    main()
