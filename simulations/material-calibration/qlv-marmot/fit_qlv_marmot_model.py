@@ -44,7 +44,15 @@ before committing to a full run.
 """
 
 import os
+import sys
 from pathlib import Path
+
+# Add material-calibration and analysis paths
+REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "1d-qlv"))
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "prf"))
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration"))
+sys.path.insert(0, str(REPO_ROOT / "analysis"))
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -56,6 +64,11 @@ import marmot
 from fit_prf_model import downsample_for_fit
 from fit_qlv_model import BASE, MATERIALS, load, find_ramp_bounds, mean_strain_rates, estimate_youngs_modulus
 from plotstyle import colors, figsize_double
+from poisson_ratios import POISSON_RATIOS, bulk_modulus_from_poisson, shear_modulus_from_base
+
+CALIB_DIR = REPO_ROOT / "simulations" / "material-calibration"
+PARAMS_DIR = CALIB_DIR / "parameters"
+PARAMS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Compositions not yet tested (see specimens/); rendered as empty "pending"
 # rows in the comparison grids so the layout is already in place for them.
@@ -103,13 +116,12 @@ def build_props(base_name, elastic, gammas, taus):
     return np.array(props, dtype=np.float64)
 
 
-def elastic_from_C1(base_name, C1, C2, C3):
+def elastic_from_C1(base_name, C1, C2, C3, nu=0.49):
     """Map the free elastic coefficient(s) to the base's elasticProperties
-    array, with kappa = 100*C1 fixed near-incompressible and always the LAST
-    slot (every base now composes Psi = Psi_iso(shape params) +
-    kappa/8*(ln detC)^2 -- see the module docstring). For "Ogden", C1 plays
-    the role of the single-term Ogden modulus mu and C2 the exponent alpha."""
-    kappa = 100.0 * C1
+    array, computing physical bulk modulus kappa from shear modulus mu_0
+    and Poisson's ratio nu."""
+    mu_0 = shear_modulus_from_base(base_name, C1, C2, C3)
+    kappa = bulk_modulus_from_poisson(mu_0, nu)
     if base_name == "NeoHooke":
         return [C1, kappa]  # here "C1" plays the role of mu (shear modulus)
     if base_name == "MooneyRivlin":
@@ -121,13 +133,13 @@ def elastic_from_C1(base_name, C1, C2, C3):
     raise ValueError(base_name)
 
 
-def _simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus):
+def _simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus, nu=0.49):
     """Replay a measured (time, stretch) history through the Marmot
     CompressibleFiniteStrainLinearViscoelasticity material-point solver;
     returns predicted nominal (engineering, 1st Piola-Kirchhoff) axial stress,
     converted from the solver's native Kirchhoff stress via P11 = tau11/F11
     (F is diagonal here, so this is exact, not approximate)."""
-    elastic = elastic_from_C1(base_name, C1, C2, C3)
+    elastic = elastic_from_C1(base_name, C1, C2, C3, nu=nu)
     props = build_props(base_name, elastic, gammas, taus)
     options = marmot.solvers.FiniteStrainSolver.SolverOptions()
     solver = marmot.solvers.FiniteStrainSolver("COMPRESSIBLEFINITESTRAINLINEARVISCOELASTICITY", props, options)
@@ -299,6 +311,7 @@ def fit_joint(material, cfg, base_name, G0, g0, tau0, max_nfev=100, verbose=Fals
         weight = np.where(is_ramp, 1.0 / np.sqrt(max(n_ramp_pts, 1)), 1.0 / np.sqrt(max(n_hold_pts, 1)))
         test_data[rate_group] = (t, 1.0 + strain, stress, stress.max(), weight)
 
+    nu = POISSON_RATIOS.get(material, 0.49)
     x0, lb, ub = seed_and_bounds(base_name, G0, g0, tau0, tau_lb_value=tau_lb_value)
     if x0_override is not None:
         x0 = list(np.clip(x0_override, lb, ub))
@@ -308,7 +321,7 @@ def fit_joint(material, cfg, base_name, G0, g0, tau0, max_nfev=100, verbose=Fals
         out = []
         for t, stretch, stress, peak, weight in test_data.values():
             try:
-                pred = _simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus)
+                pred = _simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus, nu=nu)
             except Exception:
                 pred = np.zeros_like(stress)
             out.append((pred - stress) / peak * weight)
@@ -317,9 +330,12 @@ def fit_joint(material, cfg, base_name, G0, g0, tau0, max_nfev=100, verbose=Fals
     result = least_squares(residuals, x0, bounds=(lb, ub), method="trf", verbose=2 if verbose else 0,
                             xtol=1e-10, ftol=1e-10, gtol=1e-10, diff_step=1e-3, max_nfev=max_nfev)
     C1, C2, C3, gammas, taus = unpack(result.x, base_name)
+    mu_0 = shear_modulus_from_base(base_name, C1, C2, C3)
+    K = bulk_modulus_from_poisson(mu_0, nu)
     return {
-        "hyperelastic_base": base_name, "C1": C1, "C2": C2, "C3": C3,
-        "K": 100.0 * C1,
+        "hyperelastic_base": base_name, "nu": nu,
+        "C1": C1, "C2": C2, "C3": C3,
+        "K": K,
         "gamma1": gammas[0], "gamma2": gammas[1], "gamma3": gammas[2],
         "tau1": taus[0], "tau2": taus[1], "tau3": taus[2],
         "cost": result.cost, "nfev": result.nfev,
@@ -327,6 +343,7 @@ def fit_joint(material, cfg, base_name, G0, g0, tau0, max_nfev=100, verbose=Fals
 
 
 def validate(material, cfg, base_name, C1, C2, C3, gammas, taus):
+    nu = POISSON_RATIOS.get(material, 0.49)
     rows = []
     plot_rows = {}
     for rate_group, ids in cfg["rate_groups"].items():
@@ -336,7 +353,7 @@ def validate(material, cfg, base_name, C1, C2, C3, gammas, taus):
         measured = df["stress"].to_numpy()
         t_ds, strain_ds, stress_ds = downsample_for_fit(df, n_ramp=60, n_hold=90)
         try:
-            pred = _simulate_once(t_ds, 1.0 + strain_ds, base_name, C1, C2, C3, gammas, taus)
+            pred = _simulate_once(t_ds, 1.0 + strain_ds, base_name, C1, C2, C3, gammas, taus, nu=nu)
         except Exception as exc:
             print(f"  [validate] {material}/{base_name}/{rate_group}: solver failed ({exc}); skipping")
             continue
@@ -349,6 +366,7 @@ def validate(material, cfg, base_name, C1, C2, C3, gammas, taus):
 
 
 def validate_ramp(material, cfg, base_name, C1, C2, C3, gammas, taus):
+    nu = POISSON_RATIOS.get(material, 0.49)
     ramp_rows = {}
     for rate_group, ids in cfg["rate_groups"].items():
         test_id = ids[0]
@@ -373,7 +391,7 @@ def validate_ramp(material, cfg, base_name, C1, C2, C3, gammas, taus):
         t_ds = t_full[idx]
         strain_ds = strain_full[idx]
         try:
-            pred = _simulate_once(t_ds, 1.0 + strain_ds, base_name, C1, C2, C3, gammas, taus)
+            pred = _simulate_once(t_ds, 1.0 + strain_ds, base_name, C1, C2, C3, gammas, taus, nu=nu)
         except Exception as exc:
             print(f"  [validate_ramp] {material}/{base_name}/{rate_group}: solver failed ({exc}); skipping")
             continue
@@ -454,14 +472,27 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
             if strain_rates is not None:
                 rate = strain_rates.get(material, {}).get(rate_group)
                 if rate is not None:
-                    label_x, ha = (0.04, "left") if rate_label_loc == "upper left" else (0.96, "right")
+                    if inset_data_by_material_base is not None and material != "A0V100":
+                        label_x, ha = 0.04, "left"
+                    else:
+                        label_x, ha = (0.04, "left") if rate_label_loc == "upper left" else (0.96, "right")
                     ax.text(label_x, 0.96, rf"$\dot\varepsilon\approx${100 * rate:.3g}\%/s", fontsize=6,
                             ha=ha, va="top", transform=ax.transAxes, color="black",
                             bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.75))
 
             # Optional inset stress-strain plot during loading ramp
             if inset_data_by_material_base is not None and material in inset_data_by_material_base:
-                ax_ins = ax.inset_axes([0.52, 0.14, 0.42, 0.42])
+                inset_cfg = {
+                    "A0V100": ([0.55, 0.10, 0.39, 0.38], (0, 18.5)),
+                    "A25V75": ([0.55, 0.54, 0.39, 0.38], (0, 31.0)),
+                    "A50V50": ([0.55, 0.52, 0.39, 0.40], (0, 20.0)),
+                    "A75V25": ([0.55, 0.52, 0.39, 0.40], (0, 6.2)),
+                    "A100V0": ([0.55, 0.52, 0.39, 0.40], (0, 0.85)),
+                }
+                rect, ylim = inset_cfg.get(material, ([0.55, 0.52, 0.39, 0.40], None))
+                if ylim is not None:
+                    ax.set_ylim(ylim)
+                ax_ins = ax.inset_axes(rect)
                 for base_name in bases:
                     if base_name not in inset_data_by_material_base[material] or rate_group not in inset_data_by_material_base[material][base_name]:
                         continue
@@ -494,7 +525,7 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
 
 
 def main():
-    prony = pd.read_csv(BASE / "qlv_prony_params.csv", index_col=0)
+    prony = pd.read_csv(PARAMS_DIR / "qlv_prony_params.csv", index_col=0)
 
     all_rows = []
     validation_rows = []
@@ -543,20 +574,24 @@ def main():
 
     validation = pd.concat(validation_rows, ignore_index=True)
     params_df = pd.DataFrame(all_rows)
-    params_df.to_csv(BASE / "qlv_marmot_params.csv", index=False)
-    print(f"\nsaved {BASE / 'qlv_marmot_params.csv'}")
+    params_df.to_csv(PARAMS_DIR / "qlv_marmot_params.csv", index=False)
+    params_df.to_csv(CALIB_DIR / "qlv_marmot_params.csv", index=False)
+    print(f"\nsaved {PARAMS_DIR / 'qlv_marmot_params.csv'}")
 
-    prf_validation = pd.read_csv(BASE / "prf_vs_qlv_comparison.csv")[
-        ["material", "rate_group", "test_id", "rmse_pct_of_peak_qlv"]
-    ]
-    merged = validation.merge(prf_validation, on=["material", "rate_group", "test_id"], how="left")
-    merged = merged.rename(columns={"rmse_pct_of_peak": "rmse_pct_of_peak_marmot"})
-    merged["improvement_pct_points"] = merged["rmse_pct_of_peak_qlv"] - merged["rmse_pct_of_peak_marmot"]
-    merged.to_csv(BASE / "qlv_marmot_vs_qlv1d_comparison.csv", index=False)
-    print(f"saved {BASE / 'qlv_marmot_vs_qlv1d_comparison.csv'}")
-    print("\n=== Marmot generalized-Maxwell model vs. 1D QLV baseline (RMSE, % of peak stress) ===")
-    print(merged[["material", "hyperelastic_base", "rate_group", "rmse_pct_of_peak_qlv",
-                  "rmse_pct_of_peak_marmot", "improvement_pct_points"]].to_string(index=False))
+    prf_csv = PARAMS_DIR / "prf_vs_qlv_comparison.csv"
+    if prf_csv.exists():
+        prf_validation = pd.read_csv(prf_csv)[
+            ["material", "rate_group", "test_id", "rmse_pct_of_peak_qlv"]
+        ]
+        merged = validation.merge(prf_validation, on=["material", "rate_group", "test_id"], how="left")
+        merged = merged.rename(columns={"rmse_pct_of_peak": "rmse_pct_of_peak_marmot"})
+        merged["improvement_pct_points"] = merged["rmse_pct_of_peak_qlv"] - merged["rmse_pct_of_peak_marmot"]
+        merged.to_csv(PARAMS_DIR / "qlv_marmot_vs_qlv1d_comparison.csv", index=False)
+        merged.to_csv(CALIB_DIR / "qlv_marmot_vs_qlv1d_comparison.csv", index=False)
+        print(f"saved {PARAMS_DIR / 'qlv_marmot_vs_qlv1d_comparison.csv'}")
+        print("\n=== Marmot generalized-Maxwell model vs. 1D QLV baseline (RMSE, % of peak stress) ===")
+        print(merged[["material", "hyperelastic_base", "rate_group", "rmse_pct_of_peak_qlv",
+                      "rmse_pct_of_peak_marmot", "improvement_pct_points"]].to_string(index=False))
 
     rate_groups = ["very slow", "slow", "fast"]
     materials = list(MATERIALS) + PLACEHOLDER_MATERIALS
@@ -564,10 +599,10 @@ def main():
     strain_rates = mean_strain_rates()
     make_grid_plot(plot_data, rate_groups, materials, bases, "Time in s",
                     "CompressibleFiniteStrainLinearViscoelasticity (Marmot) vs. measured stress relaxation",
-                    BASE / "qlv_marmot_validation_grid", strain_rates=strain_rates)
+                    CALIB_DIR / "qlv_marmot_validation_grid", strain_rates=strain_rates)
     make_grid_plot(ramp_data, rate_groups, materials, bases, "Engineering strain in \\%",
                     "CompressibleFiniteStrainLinearViscoelasticity (Marmot) vs. measured stress-strain (ramp only)",
-                    BASE / "qlv_marmot_stress_strain_grid", strain_rates=strain_rates, sharex=False,
+                    CALIB_DIR / "qlv_marmot_stress_strain_grid", strain_rates=strain_rates, sharex=False,
                     rate_label_loc="upper left")
 
 
