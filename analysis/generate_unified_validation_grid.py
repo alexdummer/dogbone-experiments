@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Generate publication-ready 5x3 validation grid comparing all 3 material models:
-- Generalized-Maxwell / QLV-Marmot (Mooney-Rivlin)
+- Generalized-Maxwell / QLV-Marmot (Neo-Hookean)
 - Bergström-Boyce (Arruda-Boyce)
-- Fractional Schapery (Mooney-Rivlin)
-against measured tensile stress-relaxation data with embedded loading-ramp insets.
+- Fractional Schapery (Neo-Hookean)
+against measured tensile stress-relaxation data with embedded loading-ramp insets
+under an idealized relaxation protocol.
 """
 
 from pathlib import Path
@@ -15,6 +16,7 @@ sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "qlv
 sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "fractional-schapery"))
 sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "1d-qlv"))
 sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration" / "prf"))
+sys.path.insert(0, str(REPO_ROOT / "simulations" / "material-calibration"))
 sys.path.insert(0, str(REPO_ROOT / "analysis"))
 
 import matplotlib.pyplot as plt
@@ -23,10 +25,12 @@ import numpy as np
 import pandas as pd
 
 from plotstyle import colors, figsize_double
-from fit_bb_model import BASE, MATERIALS, PLACEHOLDER_MATERIALS, validate_bb, validate_bb_ramp
-from fit_qlv_marmot_model import validate as validate_qlv, validate_ramp as validate_qlv_ramp
-from fit_fractional_schapery_model import validate as validate_fs, validate_ramp as validate_fs_ramp
-from fit_qlv_model import load, mean_strain_rates
+from fit_bb_model import BASE, MATERIALS, PLACEHOLDER_MATERIALS, simulate_bb
+import fit_qlv_marmot_model as qm
+from fit_fractional_schapery_model import _simulate_once as sim_fs
+from fit_qlv_model import load, find_ramp_bounds, mean_strain_rates
+from fit_prf_model import downsample_for_fit
+from poisson_ratios import POISSON_RATIOS
 
 PARAMS_DIR = REPO_ROOT / "simulations" / "material-calibration" / "parameters"
 RATE_GROUPS = ["very slow", "slow", "fast"]
@@ -77,94 +81,89 @@ def simulate_all():
     fs_ramp_data = {}
 
     for material, cfg in MATERIALS.items():
-        print(f"Simulating {material}...", flush=True)
+        print(f"Simulating {material} (idealized)...", flush=True)
+        nu = POISSON_RATIOS.get(material, 0.49)
 
-        # 1. QLV-Marmot (Mooney-Rivlin)
+        # 1. QLV-Marmot (Neo-Hookean)
         r_qlv = params_qlv[
-            (params_qlv["material"] == material) & (params_qlv["hyperelastic_base"] == "MooneyRivlin")
+            (params_qlv["material"] == material) & (params_qlv["hyperelastic_base"] == "NeoHooke")
         ].iloc[0]
-        _, qlv_time = validate_qlv(
-            material,
-            cfg,
-            "MooneyRivlin",
-            r_qlv["C1"],
-            r_qlv["C2"],
-            r_qlv["C3"],
-            [r_qlv["gamma1"], r_qlv["gamma2"], r_qlv["gamma3"]],
-            [r_qlv["tau1"], r_qlv["tau2"], r_qlv["tau3"]],
-        )
-        qlv_ramp = validate_qlv_ramp(
-            material,
-            cfg,
-            "MooneyRivlin",
-            r_qlv["C1"],
-            r_qlv["C2"],
-            r_qlv["C3"],
-            [r_qlv["gamma1"], r_qlv["gamma2"], r_qlv["gamma3"]],
-            [r_qlv["tau1"], r_qlv["tau2"], r_qlv["tau3"]],
-        )
-        qlv_time_data[material] = qlv_time
-        qlv_ramp_data[material] = qlv_ramp
+        C1_qlv = r_qlv["C1"]
+        gammas_qlv = [r_qlv["gamma1"], r_qlv["gamma2"], r_qlv["gamma3"]]
+        taus_qlv = [r_qlv["tau1"], r_qlv["tau2"], r_qlv["tau3"]]
 
         # 2. Bergström-Boyce (Arruda-Boyce)
         r_bb = params_bb[
             (params_bb["material"] == material) & (params_bb["hyperelastic_base"] == "ArrudaBoyce")
         ].iloc[0]
-        _, bb_time = validate_bb(
-            material,
-            cfg,
-            "ArrudaBoyce",
-            (r_bb["A1"], r_bb["A2"], r_bb["A3"]),
-            (r_bb["B1"], r_bb["B2"], r_bb["B3"]),
-            r_bb["c1"],
-            r_bb["c2"],
-            r_bb["c3"],
-        )
-        bb_ramp = validate_bb_ramp(
-            material,
-            cfg,
-            "ArrudaBoyce",
-            (r_bb["A1"], r_bb["A2"], r_bb["A3"]),
-            (r_bb["B1"], r_bb["B2"], r_bb["B3"]),
-            r_bb["c1"],
-            r_bb["c2"],
-            r_bb["c3"],
-        )
-        bb_time_data[material] = bb_time
-        bb_ramp_data[material] = bb_ramp
+        A_bb = (r_bb["A1"], r_bb["A2"], r_bb["A3"])
+        B_bb = (r_bb["B1"], r_bb["B2"], r_bb["B3"])
+        c1_bb, c2_bb, c3_bb = r_bb["c1"], r_bb["c2"], r_bb["c3"]
 
         # 3. Fractional Schapery (Neo-Hookean base)
         r_fs = params_fs[
             (params_fs["material"] == material) & (params_fs["hyperelastic_base"] == "NeoHooke")
         ].iloc[0]
-        _, fs_time = validate_fs(
-            material,
-            cfg,
-            "NeoHooke",
-            r_fs["C1"],
-            r_fs["C2"],
-            r_fs["C3"],
-            r_fs["alpha"],
-            r_fs["tau0"],
-            r_fs["g_inf"],
-            r_fs["a1"],
-            r_fs["a2"],
-            r_fs["b_S"],
-        )
-        fs_ramp = validate_fs_ramp(
-            material,
-            cfg,
-            "NeoHooke",
-            r_fs["C1"],
-            r_fs["C2"],
-            r_fs["C3"],
-            r_fs["alpha"],
-            r_fs["tau0"],
-            r_fs["g_inf"],
-            r_fs["a1"],
-            r_fs["a2"],
-            r_fs["b_S"],
-        )
+        C1_fs = r_fs["C1"]
+        alpha_fs, tau0_fs, g_inf_fs = r_fs["alpha"], r_fs["tau0"], r_fs["g_inf"]
+        a1_fs, a2_fs, b_S_fs = r_fs["a1"], r_fs["a2"], r_fs["b_S"]
+
+        qlv_time = {}
+        qlv_ramp = {}
+        bb_time = {}
+        bb_ramp = {}
+        fs_time = {}
+        fs_ramp = {}
+
+        for rg, ids in cfg["rate_groups"].items():
+            test_id = ids[0]
+            df = load(cfg, material, test_id)
+            t_full = df["time_s"].to_numpy()
+            measured = df["stress"].to_numpy()
+
+            t_ds, strain_ds, stress_ds = downsample_for_fit(df, n_ramp=40, n_hold=60)
+            onset, ramp_end = find_ramp_bounds(df["position_mm"])
+            t_ramp_end = df["time_s"].iloc[ramp_end]
+            is_ramp = t_ds <= t_ramp_end
+            peak_strain = df["strain"].iloc[ramp_end]
+            mean_strain_rate = peak_strain / t_ramp_end
+
+            # Idealized strain: linear ramp with average strain rate, constant peak strain in hold phase
+            strain_ideal = np.where(is_ramp, mean_strain_rate * t_ds, peak_strain)
+            stretch_ideal = 1.0 + strain_ideal
+
+            # Dense ramp simulation for loading-ramp inset
+            t_ramp_dense = np.linspace(0, t_ramp_end, 40)
+            strain_ramp_dense = np.linspace(0, peak_strain, 40)
+            stretch_ramp_dense = 1.0 + strain_ramp_dense
+
+            # Raw ramp data for inset background
+            sl_ramp = slice(onset, ramp_end + 1)
+            strain_raw_ramp = df["strain"].to_numpy()[sl_ramp]
+            stress_raw_ramp = df["stress"].to_numpy()[sl_ramp]
+
+            # QLV (Neo-Hookean)
+            p_qlv = qm._simulate_once(t_ds, stretch_ideal, "NeoHooke", C1_qlv, 0.0, 0.0, gammas_qlv, taus_qlv, nu=nu)
+            p_qlv_ramp = qm._simulate_once(t_ramp_dense, stretch_ramp_dense, "NeoHooke", C1_qlv, 0.0, 0.0, gammas_qlv, taus_qlv, nu=nu)
+            qlv_time[rg] = (t_full, measured, t_ds, p_qlv)
+            qlv_ramp[rg] = (100 * strain_raw_ramp, stress_raw_ramp, 100 * strain_ramp_dense, p_qlv_ramp)
+
+            # BB (Arruda-Boyce)
+            p_bb = simulate_bb(t_ds, stretch_ideal, "ArrudaBoyce", A_bb, B_bb, c1_bb, c2_bb, c3_bb, nu=nu)
+            p_bb_ramp = simulate_bb(t_ramp_dense, stretch_ramp_dense, "ArrudaBoyce", A_bb, B_bb, c1_bb, c2_bb, c3_bb, nu=nu)
+            bb_time[rg] = (t_full, measured, t_ds, p_bb)
+            bb_ramp[rg] = (100 * strain_raw_ramp, stress_raw_ramp, 100 * strain_ramp_dense, p_bb_ramp)
+
+            # FS (Neo-Hookean)
+            p_fs = sim_fs(t_ds, stretch_ideal, "NeoHooke", C1_fs, 0.0, 0.0, alpha_fs, tau0_fs, g_inf_fs, a1_fs, a2_fs, b_S_fs, nu=nu)
+            p_fs_ramp = sim_fs(t_ramp_dense, stretch_ramp_dense, "NeoHooke", C1_fs, 0.0, 0.0, alpha_fs, tau0_fs, g_inf_fs, a1_fs, a2_fs, b_S_fs, nu=nu)
+            fs_time[rg] = (t_full, measured, t_ds, p_fs)
+            fs_ramp[rg] = (100 * strain_raw_ramp, stress_raw_ramp, 100 * strain_ramp_dense, p_fs_ramp)
+
+        qlv_time_data[material] = qlv_time
+        qlv_ramp_data[material] = qlv_ramp
+        bb_time_data[material] = bb_time
+        bb_ramp_data[material] = bb_ramp
         fs_time_data[material] = fs_time
         fs_ramp_data[material] = fs_ramp
 
@@ -332,7 +331,7 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
 
     legend_handles = [
         Line2D([0], [0], color="0.4", alpha=0.5, linewidth=2.0, label="measured"),
-        Line2D([0], [0], color="black", linestyle="-", marker="o", markersize=3.5, label="Generalized-Maxwell (Mooney-Rivlin)"),
+        Line2D([0], [0], color="black", linestyle="-", marker="o", markersize=3.5, label="Generalized-Maxwell (Neo-Hookean)"),
         Line2D([0], [0], color="black", linestyle="--", marker="^", markersize=3.5, label="Bergström-Boyce (Arruda-Boyce)"),
         Line2D([0], [0], color="black", linestyle="-.", marker="s", markersize=3.5, label="Fractional Schapery (Neo-Hookean)"),
     ]
