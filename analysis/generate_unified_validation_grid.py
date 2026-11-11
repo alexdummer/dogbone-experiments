@@ -243,7 +243,8 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
             ax.grid(True, alpha=0.3)
 
             if row == 0:
-                ax.set_title(rate_group, fontsize=9)
+                rate_title = {"very slow": "slow", "slow": "medium", "fast": "fast"}.get(rate_group, rate_group)
+                ax.set_title(rate_title, fontsize=9)
             disp_mat = {
                 "A0V100": "A0",
                 "A25V75": "A25",

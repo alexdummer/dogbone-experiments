@@ -441,7 +441,8 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
                 for spine in ax.spines.values():
                     spine.set_color("#cccccc")
                 if row == 0:
-                    ax.set_title(rate_group, fontsize=9)
+                    rate_title = {"very slow": "slow", "slow": "medium", "fast": "fast"}.get(rate_group, rate_group)
+                    ax.set_title(rate_title, fontsize=9)
                 disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(material, material)
                 if col == 0:
                     ax.set_ylabel(disp_mat, fontsize=8)
@@ -460,7 +461,8 @@ def make_grid_plot(data_by_material_base, rate_groups, materials, bases, xlabel,
                 ax.plot(x_full, measured, color=color, linewidth=2.2, alpha=0.35, zorder=0)
             ax.grid(True, alpha=0.3)
             if row == 0:
-                ax.set_title(rate_group, fontsize=9)
+                rate_title = {"very slow": "slow", "slow": "medium", "fast": "fast"}.get(rate_group, rate_group)
+                ax.set_title(rate_title, fontsize=9)
             if col == 0:
                 disp_mat = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}.get(material, material)
                 if disp_mat == "A50":

@@ -38,12 +38,12 @@ INDIVIDUAL_ALPHA = 0.3
 
 # test_id -> rate tier
 TESTS = {
-    10: "Very slow",
-    11: "Very slow",
-    12: "Very slow",
-    1: "Slow",
-    2: "Slow",
-    9: "Slow",
+    10: "Slow",
+    11: "Slow",
+    12: "Slow",
+    1: "Medium",
+    2: "Medium",
+    9: "Medium",
     4: "Fast",
     5: "Fast",
     6: "Fast",
@@ -172,6 +172,9 @@ def main():
     out_path = Path(__file__).parent / "stress_overview.pdf"
     fig.savefig(out_path, bbox_inches="tight")
     fig.savefig(out_path.with_suffix(".png"), dpi=300, bbox_inches="tight")
+    paper_path = Path(__file__).resolve().parents[4] / "paper" / "figures" / "A25_stress_overview.pdf"
+    if paper_path.parent.is_dir():
+        fig.savefig(paper_path, bbox_inches="tight")
     print(f"saved {out_path} and {out_path.with_suffix('.png')}")
 
 

@@ -29,12 +29,12 @@ INDIVIDUAL_ALPHA = 0.3
 
 # test_id -> rate tier
 TESTS = {
-    10: "Very slow",
-    11: "Very slow",
-    12: "Very slow",
-    1: "Slow",
-    2: "Slow",
-    9: "Slow",
+    10: "Slow",
+    11: "Slow",
+    12: "Slow",
+    1: "Medium",
+    2: "Medium",
+    9: "Medium",
     4: "Fast",
     5: "Fast",
     6: "Fast",

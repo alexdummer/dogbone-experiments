@@ -45,13 +45,13 @@ INDIVIDUAL_ALPHA = 0.3
 
 # test_id -> (rate tier, included in the group's mean curve)
 TESTS = {
-    10: ("Very slow", True),
-    11: ("Very slow", True),
-    12: ("Very slow", True),
-    1: ("Slow", True),
-    2: ("Slow", False),  # outlier, retested as 13; kept only for transparency
-    3: ("Slow", True),
-    13: ("Slow", True),
+    10: ("Slow", True),
+    11: ("Slow", True),
+    12: ("Slow", True),
+    1: ("Medium", True),
+    2: ("Medium", False),  # outlier, retested as 13; kept only for transparency
+    3: ("Medium", True),
+    13: ("Medium", True),
     4: ("Fast", True),
     5: ("Fast", True),
     6: ("Fast", True),
@@ -180,6 +180,9 @@ def main():
     out_path = Path(__file__).parent / "stress_overview.pdf"
     fig.savefig(out_path, bbox_inches="tight")
     fig.savefig(out_path.with_suffix(".png"), dpi=300, bbox_inches="tight")
+    paper_path = Path(__file__).resolve().parents[4] / "paper" / "figures" / "A0_stress_overview.pdf"
+    if paper_path.parent.is_dir():
+        fig.savefig(paper_path, bbox_inches="tight")
     print(f"saved {out_path} and {out_path.with_suffix('.png')}")
 
 

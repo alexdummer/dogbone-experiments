@@ -606,8 +606,8 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
 
             if r == 0:
                 col_titles = [
-                    r"(b) Very Slow ($0.017\,\mathrm{mm/s}$)",
-                    r"(c) Slow ($0.167\,\mathrm{mm/s}$)",
+                    r"(b) Slow ($0.017\,\mathrm{mm/s}$)",
+                    r"(c) Medium ($0.167\,\mathrm{mm/s}$)",
                     r"(d) Fast ($1.67\,\mathrm{mm/s}$)"
                 ]
                 ax.set_title(col_titles[c_idx - 1], fontsize=8.5, fontweight="bold")
@@ -654,11 +654,11 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         "\\begin{table}[htpb!]",
         "    \\centering",
         "    \\small",
-        "    \\caption{Cross-modality parameter calibration: constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$) and calibrated on a single slow loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are reported for the calibration ramp and blind forward predictions across rates for both Generalized Maxwell (Mooney--Rivlin base, 6 Prony modes) and Fractional Schapery (Neo-Hookean base, 5-decade fractional kernel) models.}",
+        "    \\caption{Cross-modality parameter calibration: constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$) and calibrated on a single medium loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are reported for the calibration ramp and blind forward predictions across rates for both Generalized Maxwell (Mooney--Rivlin base, 6 Prony modes) and Fractional Schapery (Neo-Hookean base, 5-decade fractional kernel) models.}",
         "    \\label{tab:dma-qlv-summary}",
         "    \\begin{tabular}{llcccc}",
         "        \\toprule",
-        "        Blend & Constitutive Model & DMA Spectrum \\& Calibrated Ramp Modulus & Very Slow & Slow (Cal Ramp) & Fast \\\\",
+        "        Blend & Constitutive Model & DMA Spectrum \\& Calibrated Ramp Modulus & Slow & Medium (Cal Ramp) & Fast \\\\",
         "              &                    &                                         & (Blind, \\%) & (Ramp, \\%) & (Blind, \\%) \\\\",
         "        \\midrule",
     ]

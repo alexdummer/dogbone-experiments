@@ -53,8 +53,8 @@ MATERIALS = {
         "a_fraction": 0,
         "dir": DATA_FLAT / "A0V100" / "cleaned",
         "rate_groups": {
-            "very slow": [10, 11, 12],
-            "slow": [1, 3, 13],  # test 2 excluded as an outlier, replaced by 13
+            "slow": [10, 11, 12],
+            "medium": [1, 3, 13],  # test 2 excluded as an outlier, replaced by 13
             "fast": [4, 5, 6],
         },
     },
@@ -62,8 +62,8 @@ MATERIALS = {
         "a_fraction": 25,
         "dir": DATA_FLAT / "A25V75" / "cleaned",
         "rate_groups": {
-            "very slow": [10, 11, 12],
-            "slow": [1, 2, 9],  # test 3 excluded (short test, 373s vs ~607s)
+            "slow": [10, 11, 12],
+            "medium": [1, 2, 9],  # test 3 excluded (short test, 373s vs ~607s)
             "fast": [4, 5, 6],
         },
     },
@@ -71,8 +71,8 @@ MATERIALS = {
         "a_fraction": 50,
         "dir": DATA_FLAT / "A50V50-retest" / "cleaned",
         "rate_groups": {
-            "very slow": [13, 14, 15],
-            "slow": [4, 5, 6],  # test 16 excluded as an outlier (much stiffer)
+            "slow": [13, 14, 15],
+            "medium": [4, 5, 6],  # test 16 excluded as an outlier (much stiffer)
             "fast": [7, 11, 12],
         },
     },
@@ -86,8 +86,8 @@ MATERIALS = {
         "secant_strain": 0.02,
         "reliable_secant_modulus": True,
         "rate_groups": {
-            "very slow": [7, 8, 9],
-            "slow": [1, 2, 3],
+            "slow": [7, 8, 9],
+            "medium": [1, 2, 3],
             "fast": [4, 5, 6],
         },
     },
@@ -100,16 +100,16 @@ MATERIALS = {
         "secant_strain": 0.02,
         "reliable_secant_modulus": True,
         "rate_groups": {
-            "very slow": [7, 8, 9],
-            "slow": [1, 2, 3],
+            "slow": [7, 8, 9],
+            "medium": [1, 2, 3],
             "fast": [4, 5, 6],
         },
     },
 }
 
 RATE_GROUP_STYLE = {
-    "very slow": ("o", ":"),
-    "slow": ("o", "-"),
+    "slow": ("o", ":"),
+    "medium": ("o", "-"),
     "fast": ("s", "--"),
 }
 
@@ -240,7 +240,7 @@ def main():
     material_order = list(MATERIALS.keys())
     a_fractions = [MATERIALS[m]["a_fraction"] for m in material_order]
 
-    for rate_group in ["very slow", "slow", "fast"]:
+    for rate_group in ["slow", "medium", "fast"]:
         marker, ls = RATE_GROUP_STYLE[rate_group]
         s = summary[summary["rate_group"] == rate_group].set_index("material")
         s_all = s.reindex([m for m in material_order if m in s.index])
@@ -284,6 +284,9 @@ def main():
     out_path = BASE / "material_comparison.pdf"
     fig.savefig(out_path, bbox_inches="tight")
     fig.savefig(out_path.with_suffix(".png"), dpi=300, bbox_inches="tight")
+    paper_fig_path = REPO_ROOT.parent / "paper" / "figures" / "material_comparison.pdf"
+    if paper_fig_path.parent.is_dir():
+        fig.savefig(paper_fig_path, bbox_inches="tight")
     print(f"\nsaved {out_path} and {out_path.with_suffix('.png')}")
 
     # --- relaxation shape comparison, fast rate ---
@@ -316,7 +319,7 @@ def main():
     for ax, (material, cfg) in zip(axes3, MATERIALS.items()):
         color = colors[material_order.index(material) + 3]
         disp_name = DISPLAY_NAMES.get(material, material)
-        for rate_group in ["slow", "fast"]:
+        for rate_group in ["medium", "fast"]:
             ids = cfg["rate_groups"][rate_group]
             _, ls = RATE_GROUP_STYLE[rate_group]
             for test_id in ids:
@@ -336,6 +339,9 @@ def main():
     out_path3 = BASE / "material_relaxation_shape_rate_comparison.pdf"
     fig3.savefig(out_path3, bbox_inches="tight")
     fig3.savefig(out_path3.with_suffix(".png"), dpi=300, bbox_inches="tight")
+    paper_fig_path3 = REPO_ROOT.parent / "paper" / "figures" / "material_relaxation_shape_rate_comparison.pdf"
+    if paper_fig_path3.parent.is_dir():
+        fig3.savefig(paper_fig_path3, bbox_inches="tight")
     print(f"saved {out_path3} and {out_path3.with_suffix('.png')}")
 
     # --- strain-rate dependency: modulus vs rate, per material, all points ---

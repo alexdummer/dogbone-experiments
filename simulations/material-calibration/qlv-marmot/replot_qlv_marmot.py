@@ -23,7 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from fit_qlv_marmot_model import (
-    BASE, MATERIALS, PLACEHOLDER_MATERIALS, validate, validate_ramp, make_grid_plot,
+    CALIB_DIR, PARAMS_DIR, MATERIALS, PLACEHOLDER_MATERIALS, validate, validate_ramp, make_grid_plot,
 )
 from fit_qlv_model import mean_strain_rates
 
@@ -31,7 +31,7 @@ BASES = ["NeoHooke", "Yeoh", "MooneyRivlin"]  # Ogden excluded, see module docst
 
 
 def main():
-    params = pd.read_csv(BASE / "qlv_marmot_params.csv")
+    params = pd.read_csv(PARAMS_DIR / "qlv_marmot_params.csv")
     params = params[params["hyperelastic_base"].isin(BASES)]
 
     validation_rows = []
@@ -53,14 +53,14 @@ def main():
 
     validation = pd.concat(validation_rows, ignore_index=True)
 
-    prf_validation = pd.read_csv(BASE / "prf_vs_qlv_comparison.csv")[
+    prf_validation = pd.read_csv(PARAMS_DIR / "prf_vs_qlv_comparison.csv")[
         ["material", "rate_group", "test_id", "rmse_pct_of_peak_qlv"]
     ]
     merged = validation.merge(prf_validation, on=["material", "rate_group", "test_id"], how="left")
     merged = merged.rename(columns={"rmse_pct_of_peak": "rmse_pct_of_peak_marmot"})
     merged["improvement_pct_points"] = merged["rmse_pct_of_peak_qlv"] - merged["rmse_pct_of_peak_marmot"]
-    merged.to_csv(BASE / "qlv_marmot_vs_qlv1d_comparison.csv", index=False)
-    print(f"saved {BASE / 'qlv_marmot_vs_qlv1d_comparison.csv'}")
+    merged.to_csv(CALIB_DIR / "qlv_marmot_vs_qlv1d_comparison.csv", index=False)
+    print(f"saved {CALIB_DIR / 'qlv_marmot_vs_qlv1d_comparison.csv'}")
     print("\n=== Marmot generalized-Maxwell model vs. 1D QLV baseline (RMSE, % of peak stress) ===")
     print(merged[["material", "hyperelastic_base", "rate_group", "rmse_pct_of_peak_qlv",
                   "rmse_pct_of_peak_marmot", "improvement_pct_points"]].to_string(index=False))
@@ -75,11 +75,11 @@ def main():
     strain_rates = mean_strain_rates()
     make_grid_plot(plot_data, rate_groups, materials, BASES, "Time in s",
                     "CompressibleFiniteStrainLinearViscoelasticity (Marmot) vs. measured stress relaxation",
-                    BASE / "qlv_marmot_validation_grid", strain_rates=strain_rates,
+                    CALIB_DIR / "qlv_marmot_validation_grid", strain_rates=strain_rates,
                     inset_data_by_material_base=ramp_data)
     make_grid_plot(ramp_data, rate_groups, materials, BASES, "Engineering strain in \\%",
                     "CompressibleFiniteStrainLinearViscoelasticity (Marmot) vs. measured stress-strain (ramp only)",
-                    BASE / "qlv_marmot_stress_strain_grid", strain_rates=strain_rates, sharex=False,
+                    CALIB_DIR / "qlv_marmot_stress_strain_grid", strain_rates=strain_rates, sharex=False,
                     rate_label_loc="upper left")
 
 

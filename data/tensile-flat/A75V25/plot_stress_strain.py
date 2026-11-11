@@ -29,19 +29,19 @@ INDIVIDUAL_ALPHA = 0.3
 
 # test_id -> (rate tier, included in the group's mean curve)
 TESTS = {
-    1: ("Slow", True),
-    2: ("Slow", True),
-    3: ("Slow", True),
+    7: ("Slow", True),
+    8: ("Slow", True),
+    9: ("Slow", True),
+    1: ("Medium", True),
+    2: ("Medium", True),
+    3: ("Medium", True),
     4: ("Fast", True),
     5: ("Fast", True),
     6: ("Fast", True),
-    7: ("Very slow", True),
-    8: ("Very slow", True),
-    9: ("Very slow", True),
 }
 
 RATE_LABELS = list(dict.fromkeys(label for label, _ in TESTS.values()))
-RATE_COLOR_ALL = ["Very slow", "Slow", "Fast"]
+RATE_COLOR_ALL = ["Slow", "Medium", "Fast"]
 RATE_COLOR = {label: colors[i] for i, label in enumerate(RATE_COLOR_ALL)}
 
 

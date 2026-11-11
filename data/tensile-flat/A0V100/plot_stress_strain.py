@@ -28,13 +28,13 @@ INDIVIDUAL_ALPHA = 0.3
 
 # test_id -> (rate tier, included in the group's mean curve)
 TESTS = {
-    10: ("Very slow", True),
-    11: ("Very slow", True),
-    12: ("Very slow", True),
-    1: ("Slow", True),
-    2: ("Slow", False),  # outlier, retested as 13; kept only for transparency
-    3: ("Slow", True),
-    13: ("Slow", True),
+    10: ("Slow", True),
+    11: ("Slow", True),
+    12: ("Slow", True),
+    1: ("Medium", True),
+    2: ("Medium", False),  # outlier, retested as 13; kept only for transparency
+    3: ("Medium", True),
+    13: ("Medium", True),
     4: ("Fast", True),
     5: ("Fast", True),
     6: ("Fast", True),
