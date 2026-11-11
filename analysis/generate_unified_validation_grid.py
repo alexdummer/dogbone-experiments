@@ -37,7 +37,7 @@ RATE_GROUPS = ["very slow", "slow", "fast"]
 
 LAYOUT_CFG = {
     "A0V100": {
-        "inset": [0.55, 0.10, 0.39, 0.38],
+        "inset": [0.57, 0.18, 0.38, 0.38],
         "rate": (0.96, 0.96, "right", "top"),
         "ylim": (0, 18.5),
     },
@@ -201,42 +201,33 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
             if measured is not None:
                 ax.plot(t_full, measured, color="0.4", linewidth=2.0, alpha=0.35, zorder=1)
 
-            # Generalized Maxwell (Mooney-Rivlin): solid line with circle markers
+            # Generalized Maxwell (Mooney-Rivlin): solid line
             ax.plot(
                 t_ds_qlv,
                 pred_qlv,
                 color=color,
                 linewidth=1.0,
                 linestyle="-",
-                marker="o",
-                markersize=1.8,
-                markevery=4,
                 zorder=3,
             )
 
-            # Bergström-Boyce (Arruda-Boyce): dashed line with triangle markers
+            # Bergström-Boyce (Arruda-Boyce): dashed line
             ax.plot(
                 t_ds_bb,
                 pred_bb,
                 color=color,
                 linewidth=1.0,
                 linestyle="--",
-                marker="^",
-                markersize=1.8,
-                markevery=4,
                 zorder=4,
             )
 
-            # Fractional Schapery: dash-dot line with square markers
+            # Fractional Schapery: dash-dot line
             ax.plot(
                 t_ds_fs,
                 pred_fs,
                 color=color,
                 linewidth=1.0,
                 linestyle="-.",
-                marker="s",
-                markersize=1.8,
-                markevery=4,
                 zorder=5,
             )
 
@@ -293,9 +284,6 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
                 color=color,
                 linewidth=0.8,
                 linestyle="-",
-                marker="o",
-                markersize=1.2,
-                markevery=3,
                 zorder=3,
             )
             ax_ins.plot(
@@ -304,9 +292,6 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
                 color=color,
                 linewidth=0.8,
                 linestyle="--",
-                marker="^",
-                markersize=1.2,
-                markevery=3,
                 zorder=4,
             )
             ax_ins.plot(
@@ -315,9 +300,6 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
                 color=color,
                 linewidth=0.8,
                 linestyle="-.",
-                marker="s",
-                markersize=1.2,
-                markevery=3,
                 zorder=5,
             )
 
@@ -332,9 +314,9 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
 
     legend_handles = [
         Line2D([0], [0], color="0.4", alpha=0.5, linewidth=2.0, label="measured"),
-        Line2D([0], [0], color="black", linestyle="-", marker="o", markersize=3.5, label="Generalized-Maxwell (Neo-Hookean)"),
-        Line2D([0], [0], color="black", linestyle="--", marker="^", markersize=3.5, label="Bergström-Boyce (Arruda-Boyce)"),
-        Line2D([0], [0], color="black", linestyle="-.", marker="s", markersize=3.5, label="Fractional Schapery (Neo-Hookean)"),
+        Line2D([0], [0], color="black", linestyle="-", label="Generalized-Maxwell (Neo-Hookean)"),
+        Line2D([0], [0], color="black", linestyle="--", label="Bergström-Boyce (Arruda-Boyce)"),
+        Line2D([0], [0], color="black", linestyle="-.", label="Fractional Schapery (Neo-Hookean)"),
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=4, fontsize=7.0, bbox_to_anchor=(0.5, 1.02), frameon=False)
 
