@@ -325,7 +325,15 @@ def main():
             for test_id in ids:
                 t, norm = curves[(material, rate_group, test_id)]
                 mask = t > 0
-                ax.plot(t[mask], norm[mask], color=color, linestyle=ls, linewidth=0.7,
+                t_plot = t[mask]
+                norm_plot = norm[mask]
+                if len(t_plot) > 120:
+                    log_t = np.log10(t_plot)
+                    target_log_t = np.linspace(log_t[0], log_t[-1], 120)
+                    idx = np.unique(np.clip(np.searchsorted(log_t, target_log_t), 0, len(t_plot) - 1))
+                    t_plot = t_plot[idx]
+                    norm_plot = norm_plot[idx]
+                ax.plot(t_plot, norm_plot, color=color, linestyle=ls, linewidth=0.8,
                         label=f"{rate_group} rate" if test_id == ids[0] else None)
         ax.set_xscale("log")
         if disp_name == "A50":
