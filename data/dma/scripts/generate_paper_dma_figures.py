@@ -212,16 +212,27 @@ ax2.set_ylabel("Loss factor $\\tan\\delta$ (--)")
 ax2.set_ylim(0, 2.3)
 ax2.text(0.04, 0.92, "(b)", transform=ax2.transAxes, fontsize=11, fontweight="bold")
 
-# Annotate peak Tg
+# Annotate peak Tg with clean offsets and pointer arrows
+tg_annotations = {
+    "A100V0": {"xy": (10, 1.92), "xytext": (-4, 1.95), "ha": "center"},
+    "A75V25": {"xy": (25, 0.53), "xytext": (16, 0.78), "ha": "center"},
+    "A50V50": {"xy": (65, 0.61), "xytext": (52, 0.95), "ha": "center"},
+    "A25V75": {"xy": (70, 0.76), "xytext": (70, 1.15), "ha": "center"},
+    "A0V100": {"xy": (75, 0.84), "xytext": (88, 1.05), "ha": "center"},
+}
+
 for item in summary_table_data:
     mat = item["Material"]
     tg = item["Tg_mean"]
-    tm = item["tan_mean"]
+    ann = tg_annotations[mat]
     ax2.annotate(f"{tg:.0f}$^\\circ$C",
-                 xy=(tg, tm),
-                 xytext=(tg + 3, tm + 0.06),
-                 fontsize=7,
-                 color=MAT_COLORS[mat])
+                 xy=ann["xy"],
+                 xytext=ann["xytext"],
+                 fontsize=7.5,
+                 fontweight="bold",
+                 color=MAT_COLORS[mat],
+                 arrowprops=dict(arrowstyle="->", color=MAT_COLORS[mat], lw=0.8, shrinkA=2, shrinkB=3),
+                 ha=ann["ha"], va="center")
 
 # Add custom handle for replicates vs spline in legend
 custom_lines = [
