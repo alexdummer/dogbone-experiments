@@ -145,11 +145,16 @@ def grid_plot(xkey, xlabel, out_name):
 
         max_f = max(max_f_exp, max_f_fe)
         if xkey == "t" and max_f > 0:
-            ax.set_ylim(-0.02 * max_f, 1.42 * max_f)
+            if material in ("A0V100", "A25V75"):
+                inset_pos = [0.50, 0.06, 0.46, 0.30]
+                ax.set_ylim(-0.02 * max_f, 1.25 * max_f)
+            else:
+                inset_pos = [0.48, 0.55, 0.48, 0.40]
+                ax.set_ylim(-0.02 * max_f, 1.42 * max_f)
 
             # Inset for loading ramp force-displacement response
             t_ramp = RAMP_TIMES.get(material, 10.0)
-            ax_ins = ax.inset_axes([0.48, 0.55, 0.48, 0.40])
+            ax_ins = ax.inset_axes(inset_pos)
 
             if reps:
                 valid_reps = [
