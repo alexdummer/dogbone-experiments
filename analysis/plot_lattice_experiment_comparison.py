@@ -36,9 +36,9 @@ X_SYMMETRY_FACTOR = 2.0  # gripDisp -> full grip-to-grip elongation
 CROSS_SECTION_SYMMETRY_FACTOR = 4.0  # gripForce -> full-specimen axial force
 
 MODELS = [
-    ("", "QLV-Marmot", "-", "o"),
-    ("_bb", "Bergström-Boyce", "--", "^"),
-    ("_fractional_schapery", "Fractional Schapery", "-.", "s"),
+    ("", "GM", "-"),
+    ("_bb", "BB", "--"),
+    ("_fractional_schapery", "FS", "-."),
 ]
 DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
 
@@ -123,14 +123,13 @@ def grid_plot(xkey, xlabel, out_name):
                 ax.plot(x, force, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
 
         # Plot FE models
-        for suffix, model_label, ls, marker in MODELS:
+        for suffix, model_label, ls in MODELS:
             result = load_fe(material, suffix)
             if result is None:
                 continue
             t, disp, force = result
             x = t if xkey == "t" else disp
-            ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.2,
-                    marker=marker, markersize=2.2, markevery=2, zorder=3)
+            ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
 
         ax.set_title(disp_name, fontsize=8.5)
         ax.grid(True, alpha=0.4)
@@ -142,9 +141,9 @@ def grid_plot(xkey, xlabel, out_name):
     legend_handles = [
         Patch(facecolor="0.78", edgecolor="none", alpha=0.55, label="Experiment (scatter)"),
         Line2D([], [], color="0.25", linestyle="-", linewidth=1.1, label="Experiment (mean)"),
-        Line2D([], [], color="black", linestyle="-", marker="o", markersize=3, label="QLV-Marmot"),
-        Line2D([], [], color="black", linestyle="--", marker="^", markersize=3, label="Bergström-Boyce"),
-        Line2D([], [], color="black", linestyle="-.", marker="s", markersize=3, label="Fractional Schapery"),
+        Line2D([], [], color="black", linestyle="-", label="GM (neo-Hookean)"),
+        Line2D([], [], color="black", linestyle="--", label="BB (Arruda-Boyce)"),
+        Line2D([], [], color="black", linestyle="-.", label="FS (neo-Hookean)"),
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.08),
                frameon=False, fontsize=7.5)

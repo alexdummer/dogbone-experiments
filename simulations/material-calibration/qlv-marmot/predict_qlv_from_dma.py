@@ -73,9 +73,9 @@ def build_props(base_name, elastic, gammas, taus):
     return np.array(props, dtype=np.float64)
 
 
-def simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus):
+def simulate_once(t, stretch, base_name, C1, C2, C3, gammas, taus, nu=0.49):
     """Run Marmot solver for arbitrary number of Maxwell elements."""
-    elastic = qm.elastic_from_C1(base_name, C1, C2, C3)
+    elastic = qm.elastic_from_C1(base_name, C1, C2, C3, nu=nu)
     props = build_props(base_name, elastic, gammas, taus)
     options = marmot.solvers.FiniteStrainSolver.SolverOptions()
     solver = marmot.solvers.FiniteStrainSolver("COMPRESSIBLEFINITESTRAINLINEARVISCOELASTICITY", props, options)
@@ -262,12 +262,13 @@ def fit_dma_fractional(mat):
     }
 
 
-def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="slow"):
+def fit_neo_hooke_on_single_ramp(mat, gammas, taus, cal_rate_group="slow"):
     """
-    Fit Mooney-Rivlin parameters (C1, C2) on the ramp phase of a single rate group,
-    keeping DMA-derived (gammas, taus) fixed.
+    Fit Neo-Hookean parameter C1 on the ramp phase of a single rate group,
+    keeping DMA-derived (gammas, taus) fixed, with bulk modulus from physical Poisson's ratio.
     """
     cfg = MATERIALS[mat]
+    nu = POISSON_RATIOS.get(mat, 0.49)
     test_id = cfg["rate_groups"][cal_rate_group][0]
     df = load(cfg, mat, test_id)
     t_ds, strain_ds, stress_ds = downsample_for_fit(df, n_ramp=40, n_hold=10)
@@ -285,21 +286,21 @@ def fit_mooney_rivlin_on_single_ramp(mat, gammas, taus, cal_rate_group="slow"):
     peak_stress = stress_ramp.max()
 
     def ramp_residuals(x):
-        C1, C2 = x
+        C1 = x[0]
         try:
-            pred = simulate_once(t_ramp, stretch_ramp, "MooneyRivlin", C1, C2, 0.0, gammas, taus)
+            pred = simulate_once(t_ramp, stretch_ramp, "NeoHooke", C1, 0.0, 0.0, gammas, taus, nu=nu)
             return (pred - stress_ramp) / peak_stress
         except Exception:
             return np.ones_like(stress_ramp) * 10.0
 
     G_est = peak_stress / max(stretch_ramp.max() - 1.0, 1e-4) / 3.0
-    x0 = [max(G_est / 2.0, 1.0), max(G_est / 4.0, 0.1)]
-    lb = [1e-3, 0.0]
-    ub = [1e4, 1e4]
+    x0 = [max(G_est / 2.0, 1.0)]
+    lb = [1e-3]
+    ub = [1e4]
 
     res = least_squares(ramp_residuals, x0, bounds=(lb, ub), method="trf", xtol=1e-6, ftol=1e-6)
-    C1, C2 = res.x
-    return C1, C2, test_id, t_ramp, stretch_ramp, stress_ramp
+    C1 = res.x[0]
+    return C1, test_id, t_ramp, stretch_ramp, stress_ramp
 
 
 def fit_fs_neo_hooke_on_single_ramp(mat, alpha, tau0, g_inf, cal_rate_group="slow"):
@@ -338,11 +339,12 @@ def fit_fs_neo_hooke_on_single_ramp(mat, alpha, tau0, g_inf, cal_rate_group="slo
     return res.x[0], test_id, t_ramp, stretch_ramp, stress_ramp
 
 
-def simulate_all_rates(mat, C1, C2, gammas, taus):
+def simulate_all_rates(mat, C1, gammas, taus):
     """
-    Simulate all rate groups across both ramp and hold using calibrated QLV parameters.
+    Simulate all rate groups across both ramp and hold using calibrated Generalized Maxwell (Neo-Hookean) parameters.
     """
     cfg = MATERIALS[mat]
+    nu = POISSON_RATIOS.get(mat, 0.49)
     results = {}
     for rg, ids in cfg["rate_groups"].items():
         test_id = ids[0]
@@ -358,7 +360,7 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
         strain_sim = np.where(is_ramp, mean_strain_rate * t_ds, peak_strain)
         stretch_sim = 1.0 + strain_sim
 
-        pred = simulate_once(t_ds, stretch_sim, "MooneyRivlin", C1, C2, 0.0, gammas, taus)
+        pred = simulate_once(t_ds, stretch_sim, "NeoHooke", C1, 0.0, 0.0, gammas, taus, nu=nu)
 
         rmse_total = np.sqrt(np.mean((pred - stress_ds) ** 2))
         rmse_pct = 100.0 * rmse_total / stress_ds.max()
@@ -390,7 +392,7 @@ def simulate_all_rates(mat, C1, C2, gammas, taus):
     return results
 
 
-def simulate_fs_all_rates(mat, C1, alpha, tau0, g_inf):
+def simulate_fs_all_rates(mat, C1, alpha, tau0, g_inf, a1=0.0, a2=0.0, b_S=0.0):
     """
     Simulate all rate groups across both ramp and hold using calibrated Fractional Schapery parameters.
     """
@@ -409,7 +411,7 @@ def simulate_fs_all_rates(mat, C1, alpha, tau0, g_inf):
         strain_sim = np.where(is_ramp, mean_strain_rate * t_ds, peak_strain)
         stretch_sim = 1.0 + strain_sim
 
-        pred = sim_fs(t_ds, stretch_sim, "NeoHooke", C1, 0.0, 0.0, alpha, tau0, g_inf, 0.0, 0.0, 0.0, nu=nu)
+        pred = sim_fs(t_ds, stretch_sim, "NeoHooke", C1, 0.0, 0.0, alpha, tau0, g_inf, a1, a2, b_S, nu=nu)
         rmse_total = np.sqrt(np.mean((pred - stress_ds) ** 2))
         rmse_pct = 100.0 * rmse_total / stress_ds.max()
 
@@ -457,54 +459,84 @@ def run_material_pipeline(mat, cal_rate_group="slow", n_terms=6):
 
     # 2. Single-Ramp Calibration
     print(f"\n[2] Single-Ramp Hyperelastic Calibration (Rate: '{cal_rate_group}'):")
-    C1_qlv, C2_qlv, cal_test_id, t_ramp, str_ramp, s_ramp = fit_mooney_rivlin_on_single_ramp(
+    C1_qlv, cal_test_id, t_ramp, str_ramp, s_ramp = fit_neo_hooke_on_single_ramp(
         mat, gammas, taus, cal_rate_group=cal_rate_group
     )
     C1_fs, _, _, _, _ = fit_fs_neo_hooke_on_single_ramp(
         mat, dma_fs["alpha"], dma_fs["tau0"], dma_fs["g_inf"], cal_rate_group=cal_rate_group
     )
-    print(f"    - QLV (Mooney-Rivlin)      : C1 = {C1_qlv:.2f} MPa, C2 = {C2_qlv:.2f} MPa (E_inst = {6.0*(C1_qlv+C2_qlv):.1f} MPa)")
+    print(f"    - GM (Neo-Hookean)         : C1 = {C1_qlv:.2f} MPa (G0 = {2.0*C1_qlv:.1f} MPa)")
     print(f"    - Fract. Schapery (Neo-Hook): C1 = {C1_fs:.2f} MPa")
 
     # 3. Simulate All Rates
     print(f"\n[3] Blind Predictions & Evaluations Across Rates:")
-    sim_results = simulate_all_rates(mat, C1_qlv, C2_qlv, gammas, taus)
+    sim_results = simulate_all_rates(mat, C1_qlv, gammas, taus)
     fs_sim_results = simulate_fs_all_rates(mat, C1_fs, dma_fs["alpha"], dma_fs["tau0"], dma_fs["g_inf"])
 
     for rg in ["very slow", "slow", "fast"]:
         is_cal = " [CALIBRATION RAMP]" if rg == cal_rate_group else " [BLIND PREDICTION]"
         q_e = sim_results[rg]["rmse_pct"]
         f_e = fs_sim_results[rg]["rmse_pct"]
-        print(f"    Rate '{rg:9s}'{is_cal}: QLV RMSE = {q_e:5.1f}% | Fract. Schapery RMSE = {f_e:5.1f}%")
+        print(f"    Rate '{rg:9s}'{is_cal}: GM RMSE = {q_e:5.1f}% | Fract. Schapery RMSE = {f_e:5.1f}%")
 
+    # 4. Dogbone-calibrated Baselines
     joint_params = None
     baseline_csv = PARAMS_DIR / "qlv_marmot_params.csv"
     if baseline_csv.exists():
         bdf = pd.read_csv(baseline_csv)
-        bdf_mat = bdf[(bdf["material"] == mat) & (bdf["hyperelastic_base"] == "MooneyRivlin")]
+        bdf_mat = bdf[(bdf["material"] == mat) & (bdf["hyperelastic_base"] == "NeoHooke")]
         if not bdf_mat.empty:
             row = bdf_mat.iloc[0]
             joint_params = {
                 "C1": row["C1"],
-                "C2": row["C2"],
                 "gammas": [row["gamma1"], row["gamma2"], row["gamma3"]],
                 "taus": [row["tau1"], row["tau2"], row["tau3"]],
             }
 
     joint_sim = None
     if joint_params is not None:
-        joint_sim = simulate_all_rates(mat, joint_params["C1"], joint_params["C2"], joint_params["gammas"], joint_params["taus"])
+        joint_sim = simulate_all_rates(mat, joint_params["C1"], joint_params["gammas"], joint_params["taus"])
+
+    joint_fs_params = None
+    fs_baseline_csv = PARAMS_DIR / "fractional_schapery_params.csv"
+    if fs_baseline_csv.exists():
+        fs_df = pd.read_csv(fs_baseline_csv)
+        fs_mat = fs_df[(fs_df["material"] == mat) & (fs_df["hyperelastic_base"] == "NeoHooke")]
+        if not fs_mat.empty:
+            row = fs_mat.iloc[0]
+            joint_fs_params = {
+                "C1": row["C1"],
+                "alpha": row["alpha"],
+                "tau0": row["tau0"],
+                "g_inf": row["g_inf"],
+                "a1": float(row.get("a1", 0.0)),
+                "a2": float(row.get("a2", 0.0)),
+                "b_S": float(row.get("b_S", 0.0)),
+            }
+
+    joint_fs_sim = None
+    if joint_fs_params is not None:
+        joint_fs_sim = simulate_fs_all_rates(
+            mat,
+            joint_fs_params["C1"],
+            joint_fs_params["alpha"],
+            joint_fs_params["tau0"],
+            joint_fs_params["g_inf"],
+            a1=joint_fs_params["a1"],
+            a2=joint_fs_params["a2"],
+            b_S=joint_fs_params["b_S"],
+        )
 
     return {
         "mat": mat,
         "dma_fit": dma_fit,
         "dma_fs": dma_fs,
         "C1": C1_qlv,
-        "C2": C2_qlv,
         "C1_fs": C1_fs,
         "sim_results": sim_results,
         "fs_sim_results": fs_sim_results,
         "joint_sim": joint_sim,
+        "joint_fs_sim": joint_fs_sim,
     }
 
 
@@ -587,9 +619,13 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
             ax.plot(q_res["t"], q_res["stress_pred"], "-", color=color, linewidth=1.3, zorder=4)
             # DMA-calibrated Fractional Schapery (Neo-Hookean)
             ax.plot(fs_res["t"], fs_res["stress_pred"], "-.", color="black", linewidth=1.1, zorder=3)
-            # Joint-fit baseline
+            # Joint-fit baseline GM
             if jsim is not None:
-                ax.plot(jsim["t"], jsim["stress_pred"], ":", color="0.4", linewidth=0.9, zorder=2)
+                ax.plot(jsim["t"], jsim["stress_pred"], ":", color="0.45", linewidth=1.0, zorder=2)
+            # Joint-fit baseline FS
+            jsim_fs = res["joint_fs_sim"][rg] if res.get("joint_fs_sim") is not None else None
+            if jsim_fs is not None:
+                ax.plot(jsim_fs["t"], jsim_fs["stress_pred"], "--", color="0.45", linewidth=1.0, zorder=2)
 
             ax.set_xscale("log")
             ax.set_xlim(0.2, 650)
@@ -623,11 +659,12 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
     # Global legend (2 neat rows)
     legend_handles = [
         Line2D([0], [0], color="gray", linewidth=2.0, alpha=0.5, label="Measured tensile test"),
-        Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated Generalized Maxwell (Mooney--Rivlin)"),
-        Line2D([0], [0], color="0.4", linestyle=":", linewidth=1.0, label="Joint 3-rate fitted baseline"),
-        Line2D([0], [0], color="black", linestyle="-.", linewidth=1.1, label="DMA-calibrated Fractional Schapery (Neo-Hookean)"),
+        Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated GM (Neo-Hookean)"),
+        Line2D([0], [0], color="black", linestyle="-.", linewidth=1.1, label="DMA-calibrated FS (Neo-Hookean)"),
+        Line2D([0], [0], color="0.45", linestyle=":", linewidth=1.0, label="Dogbone-calibrated GM baseline"),
+        Line2D([0], [0], color="0.45", linestyle="--", linewidth=1.0, label="Dogbone-calibrated FS baseline"),
     ]
-    fig.legend(handles=legend_handles, loc="upper center", ncol=2, fontsize=7.5,
+    fig.legend(handles=legend_handles, loc="upper center", ncol=3, fontsize=7.0,
                bbox_to_anchor=(0.5, 0.998), frameon=False)
     fig.tight_layout(rect=[0, 0, 1, 0.955])
 
@@ -654,7 +691,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         "\\begin{table}[htpb!]",
         "    \\centering",
         "    \\small",
-        "    \\caption{Cross-modality parameter calibration: constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$) and calibrated on a single medium loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are reported for the calibration ramp and blind forward predictions across rates for both Generalized Maxwell (Mooney--Rivlin base, 6 Prony modes) and Fractional Schapery (Neo-Hookean base, 5-decade fractional kernel) models.}",
+        "    \\caption{Cross-modality parameter calibration: constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$) and calibrated on a single medium loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are reported for the calibration ramp and blind forward predictions across rates for both GM (neo-Hookean base, 6 Prony modes) and FS (neo-Hookean base, 5-decade fractional kernel) models.}",
         "    \\label{tab:dma-qlv-summary}",
         "    \\begin{tabular}{llcccc}",
         "        \\toprule",
@@ -673,7 +710,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         gm_vs = res["sim_results"]["very slow"]["rmse_pct"]
         gm_sl = res["sim_results"]["slow"]["rmse_pct"]
         gm_fs = res["sim_results"]["fast"]["rmse_pct"]
-        gm_param = f"$E_0={dp['E0']:.1f},\\, C_1={res['C1']:.2f},\\, C_2={res['C2']:.2f}\\,\\text{{MPa}}$"
+        gm_param = f"$E_0={dp['E0']:.1f},\\, C_1={res['C1']:.2f}\\,\\text{{MPa}}$"
 
         # FS row
         fs_vs = res["fs_sim_results"]["very slow"]["rmse_pct"]
@@ -681,16 +718,16 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         fs_fs = res["fs_sim_results"]["fast"]["rmse_pct"]
         if df["tau0"] < 0.1:
             m, exp = f"{df['tau0']:.2e}".split("e")
-            tau_str = f"{m}\times 10^{{{int(exp)}}}"
+            tau_str = f"{m}\\times 10^{{{int(exp)}}}"
         else:
             tau_str = f"{df['tau0']:.1f}"
         fs_param = f"$\\alpha={df['alpha']:.3f},\\, \\tau_0={tau_str}\\,\\text{{s}},\\, C_1={res['C1_fs']:.2f}\\,\\text{{MPa}}$"
 
         table_tex.append(
-            f"        \\multirow{{2}}{{*}}{{{disp_mat}}} & Generalized Maxwell & {gm_param} & {gm_vs:.1f}\\% & {gm_sl:.1f}\\% & {gm_fs:.1f}\\% \\\\"
+            f"        \\multirow{{2}}{{*}}{{{disp_mat}}} & GM & {gm_param} & {gm_vs:.1f}\\% & {gm_sl:.1f}\\% & {gm_fs:.1f}\\% \\\\"
         )
         table_tex.append(
-            f"                             & Fractional Schapery & {fs_param} & {fs_vs:.1f}\\% & {fs_sl:.1f}\\% & {fs_fs:.1f}\\% \\\\"
+            f"                             & FS & {fs_param} & {fs_vs:.1f}\\% & {fs_sl:.1f}\\% & {fs_fs:.1f}\\% \\\\"
         )
         if i < len(mat_order) - 1:
             table_tex.append("        \\midrule")
