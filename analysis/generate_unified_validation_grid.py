@@ -37,7 +37,7 @@ RATE_GROUPS = ["very slow", "slow", "fast"]
 
 LAYOUT_CFG = {
     "A0V100": {
-        "inset": [0.57, 0.18, 0.38, 0.38],
+        "inset": [0.18, 0.14, 0.38, 0.38],
         "rate": (0.96, 0.96, "right", "top"),
         "ylim": (0, 18.5),
     },
