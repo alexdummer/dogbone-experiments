@@ -289,13 +289,6 @@ for mat in MAT_ORDER:
     spline_y = pooled_smoothing_spline(pooled_x, pooled_y, log_grid)
     
     ax1.plot(10 ** log_grid, 10 ** spline_y, linestyle="-", color=color, linewidth=1.5, label=label, zorder=3)
-    
-    # Also plot thin dashed individual replicate curves to show agreement
-    rep_linestyles = [":", "--", "-."]
-    for s_idx, df in enumerate(master_dfs):
-        ls = rep_linestyles[s_idx % len(rep_linestyles)]
-        ax1.plot(df["reduced_freq_hz"], df["E_prime_MPa"],
-                 linestyle=ls, color=color, linewidth=0.8, alpha=0.6, zorder=2)
 
 ax1.set_xscale("log")
 ax1.set_yscale("log")
