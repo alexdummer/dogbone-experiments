@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from plotstyle import colors, figsize_double
 from fit_bb_model import BASE, MATERIALS, PLACEHOLDER_MATERIALS, simulate_bb
@@ -320,6 +321,7 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=4, fontsize=7.0, bbox_to_anchor=(0.5, 1.02), frameon=False)
 
+    sns.despine(fig=fig)
     fig.tight_layout()
 
     scratch_png = Path("/home/alex/.gemini/antigravity/brain/7d08f8bf-6bf9-4623-973d-65f5d483607b/scratch/unified_validation_grid.png")

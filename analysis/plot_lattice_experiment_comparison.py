@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 from plotstyle import colors, figsize_double  # noqa: E402
+import seaborn as sns
 
 FE_BASE = REPO_ROOT / "simulations" / "fe-tension" / "jobs"
 EXP_BASE = REPO_ROOT / "data" / "tensile-lattice" / "cleaned"
@@ -222,6 +223,7 @@ def grid_plot(xkey, xlabel, out_name):
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.08),
                frameon=False, fontsize=7.5)
+    sns.despine(fig=fig)
     fig.tight_layout()
     save(fig, out_name)
 

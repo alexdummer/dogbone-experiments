@@ -47,6 +47,7 @@ import fit_qlv_marmot_model as qm
 from fit_fractional_schapery_model import _simulate_once as sim_fs, elastic_from_C1
 from poisson_ratios import POISSON_RATIOS
 from plotstyle import colors, figsize_double
+import seaborn as sns
 
 DMA_RAW_DIR = REPO_ROOT / "data" / "dma" / "raw"
 OUTPUT_DIR = REPO_ROOT / "analysis"
@@ -666,6 +667,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=3, fontsize=7.0,
                bbox_to_anchor=(0.5, 0.998), frameon=False)
+    sns.despine(fig=fig)
     fig.tight_layout(rect=[0, 0, 1, 0.955])
 
     # Save to paper figures and analysis

@@ -34,6 +34,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from plotstyle import colors, figsize_double, figsize_single
 
@@ -280,6 +281,7 @@ def main():
 
     DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
 
+    sns.despine(fig=fig)
     fig.tight_layout()
     out_path = BASE / "material_comparison.pdf"
     fig.savefig(out_path, bbox_inches="tight")
@@ -343,6 +345,7 @@ def main():
         ax.grid(True, alpha=0.4)
     axes3[0].set_ylabel("Normalized stress (stress / peak stress)", fontsize=8.5)
 
+    sns.despine(fig=fig3)
     fig3.tight_layout()
     out_path3 = BASE / "material_relaxation_shape_rate_comparison.pdf"
     fig3.savefig(out_path3, bbox_inches="tight")

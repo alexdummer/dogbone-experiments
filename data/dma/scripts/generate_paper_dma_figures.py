@@ -34,6 +34,8 @@ sns.set_theme(
         "font.family": "cm",
         "legend.frameon": False,
         "legend.fontsize": "small",
+        "axes.spines.top": False,
+        "axes.spines.right": False,
     },
 )
 sns.set_palette("colorblind")
