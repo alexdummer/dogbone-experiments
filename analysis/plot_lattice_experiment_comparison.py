@@ -93,13 +93,13 @@ def save(fig, name):
 RAMP_TIMES = {"A0V100": 2.96, "A25V75": 5.93, "A50V50": 11.87, "A75V25": 29.72, "A100V0": 11.91}
 
 
-def grid_plot(xkey, xlabel, out_name):
+def grid_plot(xkey, xlabel, out_name, normalize=False):
     from matplotlib.patches import Patch
     from matplotlib.lines import Line2D
 
     n = len(MATERIALS)
     center = n // 2
-    fig, axes = plt.subplots(1, n, figsize=figsize_double, sharey=False)
+    fig, axes = plt.subplots(1, n, figsize=figsize_double, sharey=normalize)
     for i, (ax, material) in enumerate(zip(axes, MATERIALS)):
         disp_name = DISPLAY_NAMES.get(material, material)
         fe_results = {}
@@ -111,6 +111,7 @@ def grid_plot(xkey, xlabel, out_name):
         # Plot shaded experimental scatter band across replicates and mean curve
         reps = load_replicates(material)
         max_f_exp = 0.0
+        f_norm = 1.0
         if reps:
             max_f_exp = max(f_r.max() for _, _, f_r in reps)
             if xkey == "t":
@@ -124,6 +125,11 @@ def grid_plot(xkey, xlabel, out_name):
             f_min = np.min(forces_interp, axis=0)
             f_max = np.max(forces_interp, axis=0)
             f_mean = np.mean(forces_interp, axis=0)
+            if normalize:
+                f_norm = np.max(f_mean)
+                f_min = f_min / f_norm
+                f_max = f_max / f_norm
+                f_mean = f_mean / f_norm
             ax.fill_between(x_grid, f_min, f_max, color="0.78", alpha=0.55, zorder=1)
             ax.plot(x_grid, f_mean, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
         else:
@@ -131,6 +137,9 @@ def grid_plot(xkey, xlabel, out_name):
             if exp is not None:
                 t, disp, force = exp
                 max_f_exp = force.max()
+                if normalize:
+                    f_norm = max_f_exp
+                    force = force / f_norm
                 x = t if xkey == "t" else disp
                 ax.plot(x, force, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
 
@@ -141,17 +150,26 @@ def grid_plot(xkey, xlabel, out_name):
                 continue
             t, disp, force = fe_results[suffix]
             max_f_fe = max(max_f_fe, force.max())
+            if normalize:
+                force = force / f_norm
             x = t if xkey == "t" else disp
             ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
 
         max_f = max(max_f_exp, max_f_fe)
         if xkey == "t" and max_f > 0:
-            if material in ("A0V100", "A25V75"):
-                inset_pos = [0.50, 0.06, 0.46, 0.30]
-                ax.set_ylim(-0.02 * max_f, 1.25 * max_f)
+            if normalize:
+                ax.set_ylim(-0.02, 1.60)
+                if material == "A0V100":
+                    inset_pos = [0.47, 0.08, 0.49, 0.33]
+                else:
+                    inset_pos = [0.47, 0.63, 0.49, 0.32]
             else:
-                inset_pos = [0.48, 0.55, 0.48, 0.40]
-                ax.set_ylim(-0.02 * max_f, 1.42 * max_f)
+                if material in ("A0V100", "A25V75"):
+                    inset_pos = [0.50, 0.06, 0.46, 0.30]
+                    ax.set_ylim(-0.02 * max_f, 1.25 * max_f)
+                else:
+                    inset_pos = [0.48, 0.55, 0.48, 0.40]
+                    ax.set_ylim(-0.02 * max_f, 1.42 * max_f)
 
             # Inset for loading ramp force-displacement response
             t_ramp = RAMP_TIMES.get(material, 10.0)
@@ -167,17 +185,24 @@ def grid_plot(xkey, xlabel, out_name):
                     d_max = min(d_sub.max() for d_sub, _ in valid_reps)
                     d_grid = np.linspace(0, d_max, 200)
                     f_ramp_interp = [np.interp(d_grid, d_sub, f_sub) for d_sub, f_sub in valid_reps]
+                    f_ramp_min = np.min(f_ramp_interp, axis=0)
+                    f_ramp_max = np.max(f_ramp_interp, axis=0)
+                    f_ramp_mean = np.mean(f_ramp_interp, axis=0)
+                    if normalize:
+                        f_ramp_min = f_ramp_min / f_norm
+                        f_ramp_max = f_ramp_max / f_norm
+                        f_ramp_mean = f_ramp_mean / f_norm
                     ax_ins.fill_between(
                         d_grid,
-                        np.min(f_ramp_interp, axis=0),
-                        np.max(f_ramp_interp, axis=0),
+                        f_ramp_min,
+                        f_ramp_max,
                         color="0.78",
                         alpha=0.55,
                         zorder=1,
                     )
                     ax_ins.plot(
                         d_grid,
-                        np.mean(f_ramp_interp, axis=0),
+                        f_ramp_mean,
                         color="0.25",
                         linestyle="-",
                         linewidth=1.0,
@@ -189,9 +214,12 @@ def grid_plot(xkey, xlabel, out_name):
                     continue
                 t_fe, disp_fe, force_fe = fe_results[suffix]
                 mask_fe = t_fe <= t_ramp + 0.05
+                f_ins = force_fe[mask_fe]
+                if normalize:
+                    f_ins = f_ins / f_norm
                 ax_ins.plot(
                     disp_fe[mask_fe],
-                    force_fe[mask_fe],
+                    f_ins,
                     color=colors[i],
                     linestyle=ls,
                     linewidth=1.0,
@@ -205,12 +233,23 @@ def grid_plot(xkey, xlabel, out_name):
                 spine.set_linewidth(0.5)
                 spine.set_color("#555555")
             ax_ins.set_xlabel(r"$u$ (mm)", fontsize=5.0, labelpad=0.5)
-            ax_ins.set_ylabel(r"$F$ (N)", fontsize=5.0, labelpad=0.5)
+            if normalize:
+                ax_ins.set_ylabel(r"$F / \bar{F}_{\mathrm{peak}}$", fontsize=5.0, labelpad=0.5)
+                ax_ins.set_ylim(-0.02, 1.48)
+                ax_ins.set_yticks([0, 0.5, 1.0])
+            else:
+                ax_ins.set_ylabel(r"$F$ (N)", fontsize=5.0, labelpad=0.5)
 
-        ax.set_title(disp_name, fontsize=8.5)
+        if normalize:
+            ax.set_title(f"{disp_name}\n" + r"($\bar{F}_{\mathrm{peak}} = " + f"{f_norm:.1f}" + r"\,\mathrm{N}$)", fontsize=7.5)
+        else:
+            ax.set_title(disp_name, fontsize=8.5)
         ax.grid(True, alpha=0.4)
         if i == 0:
-            ax.set_ylabel("Axial force in N", fontsize=8.5)
+            if normalize:
+                ax.set_ylabel(r"Normalized axial force $F / \bar{F}_{\mathrm{peak}}$", fontsize=8.0)
+            else:
+                ax.set_ylabel("Axial force in N", fontsize=8.5)
         if i == center:
             ax.set_xlabel(xlabel, fontsize=8.5)
 
@@ -218,10 +257,10 @@ def grid_plot(xkey, xlabel, out_name):
         Patch(facecolor="0.78", edgecolor="none", alpha=0.55, label="Experiment (scatter)"),
         Line2D([], [], color="0.25", linestyle="-", linewidth=1.1, label="Experiment (mean)"),
         Line2D([], [], color="black", linestyle="-", label="GM (neo-Hookean)"),
-        Line2D([], [], color="black", linestyle="--", label="BB (Arruda-Boyce)"),
+        Line2D([], [], color="black", linestyle="--", label="BB (neo-Hookean)"),
         Line2D([], [], color="black", linestyle="-.", label="FS (neo-Hookean)"),
     ]
-    fig.legend(handles=legend_handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.08),
+    fig.legend(handles=legend_handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.10 if normalize else 1.08),
                frameon=False, fontsize=7.5)
     sns.despine(fig=fig)
     fig.tight_layout()
@@ -229,6 +268,6 @@ def grid_plot(xkey, xlabel, out_name):
 
 
 if __name__ == "__main__":
-    grid_plot("t", "Time in s", "lattice_experiment_comparison_force_time")
-    grid_plot("disp", "Grip displacement in mm", "lattice_experiment_comparison_force_disp")
+    grid_plot("t", "Time in s", "lattice_experiment_comparison_force_time", normalize=True)
+    grid_plot("disp", "Grip displacement in mm", "lattice_experiment_comparison_force_disp", normalize=False)
 
