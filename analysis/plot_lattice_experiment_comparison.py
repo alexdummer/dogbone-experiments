@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.interpolate import pchip_interpolate
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -152,8 +153,31 @@ def grid_plot(xkey, xlabel, out_name, normalize=False):
             max_f_fe = max(max_f_fe, force.max())
             if normalize:
                 force = force / f_norm
-            x = t if xkey == "t" else disp
-            ax.plot(x, force, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
+            if xkey == "t":
+                # Finer temporal discretization for the relaxation branch to eliminate
+                # visible piecewise polygonal chords from coarse simulation increments.
+                i_peak = np.argmax(force)
+                t_ramp_fe = t[i_peak]
+                t_ramp_pts = t[: i_peak + 1]
+                f_ramp_pts = force[: i_peak + 1]
+                t_hold_pts = t[i_peak:]
+                f_hold_pts = force[i_peak:]
+
+                t_dense_ramp = np.linspace(0, t_ramp_fe, 200)
+                f_dense_ramp = np.interp(t_dense_ramp, t_ramp_pts, f_ramp_pts)
+
+                tau0 = 5.0
+                u_hold = np.log(1.0 + (t_hold_pts - t_ramp_fe) / tau0)
+                t_dense_hold = np.linspace(t_ramp_fe, t[-1], 800)
+                u_dense_hold = np.log(1.0 + (t_dense_hold - t_ramp_fe) / tau0)
+                f_dense_hold = pchip_interpolate(u_hold, f_hold_pts, u_dense_hold)
+
+                x = np.concatenate([t_dense_ramp, t_dense_hold[1:]])
+                y_plot = np.concatenate([f_dense_ramp, f_dense_hold[1:]])
+            else:
+                x = disp
+                y_plot = force
+            ax.plot(x, y_plot, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
 
         max_f = max(max_f_exp, max_f_fe)
         if xkey == "t" and max_f > 0:

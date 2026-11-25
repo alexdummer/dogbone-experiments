@@ -32,16 +32,15 @@ from fit_qlv_model import MATERIALS, load, find_ramp_bounds  # noqa: E402
 HERE = Path(__file__).parent
 PARAMS_CSV = REPO_ROOT / "simulations" / "material-calibration" / "parameters" / "bb_params.csv"
 
-ARRUDA_BOYCE_BASE_ID = 3  # BergstromBoyce's OWN HyperelasticBase enum (0-3),
-# distinct from CompressibleFiniteStrainLinearViscoelasticity's unrelated
-# 5-way selector -- do NOT reuse generate_jobs.py's BASE_MODEL_ID here.
+NEO_HOOKE_BASE_ID = 0  # BergstromBoyce's HyperelasticBase::NeoHooke (0)
 
 
 def load_bb_params():
     params = {}
     with open(PARAMS_CSV) as f:
         for row in csv.DictReader(f):
-            assert row["hyperelastic_base"] == "ArrudaBoyce"
+            if row["hyperelastic_base"] != "NeoHooke":
+                continue
             params[row["material"]] = row
     return params
 
@@ -100,8 +99,8 @@ def render_job(material, params_row, t_ramp, u_final, t_hold, test_id, mesh_incl
 *include, input={mesh_include_path}
 
 *material, name=BergstromBoyce, id=bb{material}
-** hyperelasticBase(3=ArrudaBoyce), kappaA, kappaB
-{ARRUDA_BOYCE_BASE_ID}, {kappaA:.10g}, {kappaB:.10g},
+** hyperelasticBase(0=NeoHooke), kappaA, kappaB
+{NEO_HOOKE_BASE_ID}, {kappaA:.10g}, {kappaB:.10g},
 ** A1, A2, A3, B1, B2, B3
 {A1:.10g}, {A2:.10g}, {A3:.10g}, {B1:.10g}, {B2:.10g}, {B3:.10g},
 ** c1, c2, c3
@@ -152,7 +151,9 @@ startInc=0.05, maxInc=0.05, minInc=1e-6, maxNumInc=100000, maxIter=25, stepLengt
 >>dirichlet, name=ramp, nSet=movingGrip, field=displacement, 1={u_final / 2:.6g}
 
 *step, solver=theSolver
-startInc=0.05, maxInc=0.05, minInc=1e-6, maxNumInc=100000, maxIter=25, stepLength={t_hold:.6g}
+** fine time discretization during relaxation (startInc=0.001, maxInc=0.01)
+** to ensure high temporal resolution in the relaxation branch.
+startInc=0.001, maxInc=0.01, minInc=1e-6, maxNumInc=100000, maxIter=25, stepLength={t_hold:.6g}
 >>options, name=theSolver, extrapolation=linear, linsolver=pardiso
 """
 

@@ -145,14 +145,9 @@ startInc=0.05, maxInc=0.05, minInc=1e-4, maxNumInc=100000, maxIter=25, stepLengt
 >>dirichlet, name=ramp, nSet=movingGrip, field=displacement, 1={u_final / 2:.6g}
 
 *step, solver=theSolver
-** targets 20 equal increments (startInc=maxInc=0.05), so the hold step
-** actually samples the relaxation curve instead of converging in a single
-** full-step jump; minInc is kept small (not also 0.05) so the solver can
-** still cut back if a 5%-of-hold jump doesn't converge on the first try
-** (A100V0's large displacement/soft material needed this: its first hold
-** increment failed to converge with no room to shrink when minInc was
-** rigidly pinned to 0.05 too).
-startInc=0.05, maxInc=0.05, minInc=1e-4, maxNumInc=100000, maxIter=25, stepLength={t_hold:.6g}
+** fine time discretization during relaxation (startInc=0.001, maxInc=0.01)
+** to ensure high temporal resolution in the relaxation branch.
+startInc=0.001, maxInc=0.01, minInc=1e-4, maxNumInc=100000, maxIter=25, stepLength={t_hold:.6g}
 >>options, name=theSolver, extrapolation=linear, linsolver=pardiso
 """
 
