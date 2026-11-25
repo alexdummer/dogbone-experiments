@@ -2,9 +2,9 @@
 """Generate publication-ready lattice validation figure with:
 Row 1: Axial force normalized by mean experimental peak force (F / \bar{F}_peak),
        with loading ramp insets (F / \bar{F}_peak vs. u).
-Row 2: Normalized relaxation curves (F / F_peak), where each curve (experiment
-       and individual constitutive models) is normalized by its own peak load,
-       allowing direct visual comparison of relaxation decay kinetics across materials.
+Row 2: Normalized relaxation curves (F / F_peak) during the hold phase (no loading ramp),
+       where each curve (experiment and individual constitutive models) is normalized by
+       its own peak load, isolating and directly comparing intrinsic relaxation decay kinetics.
 """
 
 from pathlib import Path
@@ -65,6 +65,7 @@ def generate_comparison_plots():
     for i, mat in enumerate(MATERIALS):
         dname = DISPLAY_NAMES[mat]
         reps = load_replicates(mat)
+        t_ramp = RAMP_TIMES.get(mat, 10.0)
         t_max = min(t.max() for t, _, _ in reps)
         xg = np.linspace(0, t_max, 1000)
         f_interp = [np.interp(xg, t, f) for t, _, f in reps]
@@ -72,8 +73,10 @@ def generate_comparison_plots():
         f_max = np.max(f_interp, axis=0)
         f_mean = np.mean(f_interp, axis=0)
         f_bar_peak = np.max(f_mean)
+        i_mean_peak = np.argmax(f_mean)
+        t_mean_peak = xg[i_mean_peak]
 
-        # Row 0: Normalized by f_bar_peak (Mean Experimental Peak Load)
+        # Row 0: Normalized by mean experimental peak force (full test duration)
         ax0 = axes[0, i]
         ax0.fill_between(xg, f_min / f_bar_peak, f_max / f_bar_peak, color="0.78", alpha=0.55, zorder=1)
         ax0.plot(xg, f_mean / f_bar_peak, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
@@ -86,7 +89,6 @@ def generate_comparison_plots():
         ax0.tick_params(labelbottom=False)
 
         # Loading ramp inset on Row 0
-        t_ramp = RAMP_TIMES.get(mat, 10.0)
         ins_pos = [0.46, 0.08, 0.49, 0.35] if mat == "A0V100" else [0.46, 0.62, 0.49, 0.34]
         ax_ins = ax0.inset_axes(ins_pos)
         v_reps = [
@@ -116,12 +118,23 @@ def generate_comparison_plots():
         ax_ins.set_ylim(-0.02, 1.48)
         ax_ins.set_yticks([0, 0.5, 1.0])
 
-        # Row 1: Normalized by each curve's own peak load (F / F_peak)
+        # Row 1: Relaxation curve only (no ramp), starting at peak
         ax1 = axes[1, i]
-        # For experiment replicates: each replicate normalized by its own peak
-        f_indiv_interp = [np.interp(xg, t, f) / np.max(f) for t, _, f in reps]
-        ax1.fill_between(xg, np.min(f_indiv_interp, axis=0), np.max(f_indiv_interp, axis=0), color="0.78", alpha=0.55, zorder=1)
-        ax1.plot(xg, f_mean / f_bar_peak, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
+        xg_hold = np.linspace(t_mean_peak, t_max, 800)
+        rep_hold_interps = []
+        for t_r, _, f_r in reps:
+            i_pk_r = np.argmax(f_r)
+            t_sub = t_r[i_pk_r:]
+            f_sub = f_r[i_pk_r:] / f_r[i_pk_r]
+            f_norm_interp = np.interp(xg_hold, t_sub, f_sub)
+            rep_hold_interps.append(f_norm_interp)
+
+        f_rep_min = np.min(rep_hold_interps, axis=0)
+        f_rep_max = np.max(rep_hold_interps, axis=0)
+        f_mean_hold = np.interp(xg_hold, xg, f_mean) / f_bar_peak
+
+        ax1.fill_between(xg_hold, f_rep_min, f_rep_max, color="0.78", alpha=0.55, zorder=1)
+        ax1.plot(xg_hold, f_mean_hold, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
         ax1.set_ylim(-0.02, 1.08)
         ax1.grid(True, alpha=0.4)
         if i == 2:
@@ -134,10 +147,9 @@ def generate_comparison_plots():
                 continue
             t_fe, disp_fe, force_fe = res
             pk_fe = np.max(force_fe)
-
-            # Smooth curve using log-time PCHIP for hold phase
             i_pk = np.argmax(force_fe)
             t_ramp_fe = t_fe[i_pk]
+
             t_dense_ramp = np.linspace(0, t_ramp_fe, 200)
             f_dense_ramp = np.interp(t_dense_ramp, t_fe[: i_pk + 1], force_fe[: i_pk + 1])
             u_hold = np.log(1.0 + (t_fe[i_pk:] - t_ramp_fe) / 5.0)
@@ -147,13 +159,13 @@ def generate_comparison_plots():
             t_smooth = np.concatenate([t_dense_ramp, t_dense_hold[1:]])
             f_smooth = np.concatenate([f_dense_ramp, f_dense_hold[1:]])
 
-            # Row 0: Normalized by f_bar_peak
+            # Row 0: Full curve normalized by f_bar_peak
             ax0.plot(t_smooth, f_smooth / f_bar_peak, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
             mask_ins = t_fe <= t_ramp + 0.05
             ax_ins.plot(disp_fe[mask_ins], force_fe[mask_ins] / f_bar_peak, color=colors[i], linestyle=ls, linewidth=1.0, zorder=3)
 
-            # Row 1: Normalized by its OWN peak load (pk_fe)
-            ax1.plot(t_smooth, f_smooth / pk_fe, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
+            # Row 1: Relaxation curve only (t_dense_hold), normalized by pk_fe
+            ax1.plot(t_dense_hold, f_dense_hold / pk_fe, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
 
     axes[0, 0].set_ylabel(r"(a) $F / \bar{F}_{\mathrm{peak}}$", fontsize=8.0)
     axes[1, 0].set_ylabel(r"(b) $F / F_{\mathrm{peak}}$", fontsize=8.0)
