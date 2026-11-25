@@ -693,7 +693,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         "\\begin{table}[htpb!]",
         "    \\centering",
         "    \\small",
-        "    \\caption{Cross-modality parameter calibration: constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$) and calibrated on a single medium loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are reported for the calibration ramp and blind forward predictions across rates for both GM (neo-Hookean base, 6 Prony modes) and FS (neo-Hookean base, 5-decade fractional kernel) models.}",
+        "    \\caption{Cross-modality parameter calibration: constitutive parameters derived from small-strain DMA master curves ($T_{\\mathrm{ref}} = \\SI{20}{\\celsius}$) and calibrated on a single medium loading ramp ($0.167\\,\\si{\\milli\\meter\\per\\second}$). Prediction errors (RMSE, \\% of peak stress) are reported for the calibration ramp and blind forward predictions across rates for both GM (6 Prony modes) and FS (6-decade fractional kernel) models.}",
         "    \\label{tab:dma-qlv-summary}",
         "    \\begin{tabular}{llcccc}",
         "        \\toprule",
@@ -712,7 +712,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
         gm_vs = res["sim_results"]["very slow"]["rmse_pct"]
         gm_sl = res["sim_results"]["slow"]["rmse_pct"]
         gm_fs = res["sim_results"]["fast"]["rmse_pct"]
-        gm_param = f"$E_0={dp['E0']:.1f},\\, C_1={res['C1']:.2f}\\,\\text{{MPa}}$"
+        gm_param = f"$E_0={dp['E0']:.1f},\\, \\mu={res['C1']:.2f}\\,\\text{{MPa}}$"
 
         # FS row
         fs_vs = res["fs_sim_results"]["very slow"]["rmse_pct"]
@@ -723,7 +723,7 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
             tau_str = f"{m}\\times 10^{{{int(exp)}}}"
         else:
             tau_str = f"{df['tau0']:.1f}"
-        fs_param = f"$\\alpha={df['alpha']:.3f},\\, \\tau_0={tau_str}\\,\\text{{s}},\\, C_1={res['C1_fs']:.2f}\\,\\text{{MPa}}$"
+        fs_param = f"$\\alpha={df['alpha']:.3f},\\, \\tau_0={tau_str}\\,\\text{{s}},\\, \\mu={res['C1_fs']:.2f}\\,\\text{{MPa}}$"
 
         table_tex.append(
             f"        \\multirow{{2}}{{*}}{{{disp_mat}}} & GM & {gm_param} & {gm_vs:.1f}\\% & {gm_sl:.1f}\\% & {gm_fs:.1f}\\% \\\\"
