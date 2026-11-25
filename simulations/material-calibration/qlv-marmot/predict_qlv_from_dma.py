@@ -660,8 +660,8 @@ def generate_paper_dma_qlv_grid(all_results, cal_rate_group="slow", n_terms=6):
     # Global legend (2 neat rows)
     legend_handles = [
         Line2D([0], [0], color="gray", linewidth=2.0, alpha=0.5, label="Measured tensile test"),
-        Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated GM (Neo-Hookean)"),
-        Line2D([0], [0], color="black", linestyle="-.", linewidth=1.1, label="DMA-calibrated FS (Neo-Hookean)"),
+        Line2D([0], [0], color="black", linewidth=1.3, label="DMA-calibrated GM"),
+        Line2D([0], [0], color="black", linestyle="-.", linewidth=1.1, label="DMA-calibrated FS"),
         Line2D([0], [0], color="0.45", linestyle=":", linewidth=1.0, label="Dogbone-calibrated GM baseline"),
         Line2D([0], [0], color="0.45", linestyle="--", linewidth=1.0, label="Dogbone-calibrated FS baseline"),
     ]

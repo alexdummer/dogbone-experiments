@@ -280,9 +280,9 @@ def grid_plot(xkey, xlabel, out_name, normalize=False):
     legend_handles = [
         Patch(facecolor="0.78", edgecolor="none", alpha=0.55, label="Experiment (scatter)"),
         Line2D([], [], color="0.25", linestyle="-", linewidth=1.1, label="Experiment (mean)"),
-        Line2D([], [], color="black", linestyle="-", label="GM (neo-Hookean)"),
-        Line2D([], [], color="black", linestyle="--", label="BB (neo-Hookean)"),
-        Line2D([], [], color="black", linestyle="-.", label="FS (neo-Hookean)"),
+        Line2D([], [], color="black", linestyle="-", label="GM"),
+        Line2D([], [], color="black", linestyle="--", label="BB"),
+        Line2D([], [], color="black", linestyle="-.", label="FS"),
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.10 if normalize else 1.08),
                frameon=False, fontsize=7.5)

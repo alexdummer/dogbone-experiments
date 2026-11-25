@@ -93,9 +93,9 @@ def simulate_all():
         gammas_qlv = [r_qlv["gamma1"], r_qlv["gamma2"], r_qlv["gamma3"]]
         taus_qlv = [r_qlv["tau1"], r_qlv["tau2"], r_qlv["tau3"]]
 
-        # 2. Bergström-Boyce (Arruda-Boyce)
+        # 2. Bergström-Boyce (Neo-Hookean)
         r_bb = params_bb[
-            (params_bb["material"] == material) & (params_bb["hyperelastic_base"] == "ArrudaBoyce")
+            (params_bb["material"] == material) & (params_bb["hyperelastic_base"] == "NeoHooke")
         ].iloc[0]
         A_bb = (r_bb["A1"], r_bb["A2"], r_bb["A3"])
         B_bb = (r_bb["B1"], r_bb["B2"], r_bb["B3"])
@@ -149,9 +149,9 @@ def simulate_all():
             qlv_time[rg] = (t_full, measured, t_ds, p_qlv)
             qlv_ramp[rg] = (100 * strain_raw_ramp, stress_raw_ramp, 100 * strain_ramp_dense, p_qlv_ramp)
 
-            # BB (Arruda-Boyce)
-            p_bb = simulate_bb(t_ds, stretch_ideal, "ArrudaBoyce", A_bb, B_bb, c1_bb, c2_bb, c3_bb, nu=nu)
-            p_bb_ramp = simulate_bb(t_ramp_dense, stretch_ramp_dense, "ArrudaBoyce", A_bb, B_bb, c1_bb, c2_bb, c3_bb, nu=nu)
+            # BB (Neo-Hookean)
+            p_bb = simulate_bb(t_ds, stretch_ideal, "NeoHooke", A_bb, B_bb, c1_bb, c2_bb, c3_bb, nu=nu)
+            p_bb_ramp = simulate_bb(t_ramp_dense, stretch_ramp_dense, "NeoHooke", A_bb, B_bb, c1_bb, c2_bb, c3_bb, nu=nu)
             bb_time[rg] = (t_full, measured, t_ds, p_bb)
             bb_ramp[rg] = (100 * strain_raw_ramp, stress_raw_ramp, 100 * strain_ramp_dense, p_bb_ramp)
 
@@ -315,9 +315,9 @@ def plot_unified_grid(qlv_time_data, qlv_ramp_data, bb_time_data, bb_ramp_data, 
 
     legend_handles = [
         Line2D([0], [0], color="0.4", alpha=0.5, linewidth=2.0, label="measured"),
-        Line2D([0], [0], color="black", linestyle="-", label="Generalized-Maxwell (Neo-Hookean)"),
-        Line2D([0], [0], color="black", linestyle="--", label="Bergström-Boyce (Arruda-Boyce)"),
-        Line2D([0], [0], color="black", linestyle="-.", label="Fractional Schapery (Neo-Hookean)"),
+        Line2D([0], [0], color="black", linestyle="-", label="Generalized-Maxwell"),
+        Line2D([0], [0], color="black", linestyle="--", label="Bergström-Boyce"),
+        Line2D([0], [0], color="black", linestyle="-.", label="Fractional Schapery"),
     ]
     fig.legend(handles=legend_handles, loc="upper center", ncol=4, fontsize=7.0, bbox_to_anchor=(0.5, 1.02), frameon=False)
 
