@@ -1,0 +1,35 @@
+*include, input=/home/alex/projects/3D-printing/dogbone-experiments/simulations/fe-tension/mesh/lattice_mesh.inc
+
+*material, name=CompressibleFiniteStrainLinearViscoelasticity, id=mat_A25V75
+0, 1,
+798.780000, 3206.696522,
+6,
+0.112000, 7.700000e-03,
+0.150000, 1.524000e-01,
+0.177500, 3.238700e+00,
+0.184600, 5.651820e+01,
+0.139900, 6.721217e+02,
+0.128400, 6.809304e+03,
+
+*section, name=sec1, material=mat_A25V75, type=solid
+all
+
+*job, name=A25V75_full, domain=3d
+*solver, solver=NISTParallel, name=theSolver
+
+*fieldOutput
+>>perNode, name=gripDisp, nSet=movingGrip, field=displacement, result=U, f(x)='np.mean(x[:,0])', saveHistory=True, export=gripDisp
+>>perNode, name=gripForce, nSet=movingGrip, field=displacement, result=P, f(x)='np.sum(x[:,0])', saveHistory=True, export=gripForce
+
+*step, solver=theSolver
+startInc=0.1000, maxInc=0.1000, minInc=1e-4, maxNumInc=1000, maxIter=25, stepLength=5.9340
+>>options, name=theSolver, extrapolation=linear, linsolver=pardiso
+>>dirichlet, name=xsym, nSet=xSymmetry, field=displacement, 1=0
+>>dirichlet, name=ysym, nSet=ySymmetry, field=displacement, 2=0
+>>dirichlet, name=zsym, nSet=zSymmetry, field=displacement, 3=0
+>>dirichlet, name=fixmove, nSet=movingGrip, field=displacement, 2=0, 3=0
+>>dirichlet, name=ramp, nSet=movingGrip, field=displacement, 1=0.494208
+
+*step, solver=theSolver
+startInc=0.0500, maxInc=0.0500, minInc=1e-4, maxNumInc=1000, maxIter=25, stepLength=600.8660
+>>options, name=theSolver, extrapolation=linear, linsolver=pardiso
