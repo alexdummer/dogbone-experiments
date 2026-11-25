@@ -1,281 +1,162 @@
-"""QLV-Marmot vs. Bergström-Boyce FE predictions vs. the first physical
-dogbone-lattice validation tests (2026-09-14), one panel per material.
-Companion to plot_lattice_model_comparison.py -- same simulations, same
-scaling conventions, same grid layout, with the measured force-time/
-force-displacement curve added as a third series. Follows plotstyle.py
-conventions.
-
-Experimental data: dogbone-lattices/experiments/clean_data.py, one test per
-material at that material's own "slow"-tier ramp/hold protocol -- the same
-protocol the FE job decks target (see generate_jobs.py), so no rate
-mismatch is expected between experiment and simulation.
-
-One column per material (not sharey: peak forces span two orders of
-magnitude across the five blends, same reasoning as plot_lattice_model_
-comparison.py). Cleaned force_N is negative-in-tension (project convention);
-flipped sign here to match the FE gripForce convention (positive in
-tension, see edelweissfe/plot_load_time.py).
+#!/usr/bin/env python3
+"""Generate publication-ready lattice validation figure with:
+Row 1: Axial force normalized by mean experimental peak force (F / \bar{F}_peak),
+       with loading ramp insets (F / \bar{F}_peak vs. u).
+Row 2: Normalized relaxation curves (F / F_peak), where each curve (experiment
+       and individual constitutive models) is normalized by its own peak load,
+       allowing direct visual comparison of relaxation decay kinetics across materials.
 """
-import sys
-from pathlib import Path
 
+from pathlib import Path
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.interpolate import pchip_interpolate
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
+import seaborn as sns
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-from plotstyle import colors, figsize_double  # noqa: E402
-import seaborn as sns
+from plotstyle import colors
 
 FE_BASE = REPO_ROOT / "simulations" / "fe-tension" / "jobs"
 EXP_BASE = REPO_ROOT / "data" / "tensile-lattice" / "cleaned"
-OUT_BASE = Path(__file__).parent
+PAPER_FIGS = Path(__file__).resolve().parents[2] / "paper" / "figures"
+ANALYSIS_DIR = Path(__file__).resolve().parent
+
 MATERIALS = ["A0V100", "A25V75", "A50V50", "A75V25", "A100V0"]
-
-X_SYMMETRY_FACTOR = 2.0  # gripDisp -> full grip-to-grip elongation
-CROSS_SECTION_SYMMETRY_FACTOR = 4.0  # gripForce -> full-specimen axial force
-
-MODELS = [
-    ("", "GM", "-"),
-    ("_bb", "BB", "--"),
-    ("_fractional_schapery", "FS", "-."),
-]
 DISPLAY_NAMES = {"A0V100": "A0", "A25V75": "A25", "A50V50": "A50", "A75V25": "A75", "A100V0": "A100"}
+MODELS = [("", "GM", "-"), ("_bb", "BB", "--"), ("_fractional_schapery", "FS", "-.")]
+RAMP_TIMES = {"A0V100": 2.96, "A25V75": 5.93, "A50V50": 11.87, "A75V25": 29.72, "A100V0": 11.91}
+
+X_SYMMETRY_FACTOR = 2.0
+CROSS_SECTION_SYMMETRY_FACTOR = 4.0
 
 
-def load_fe(material, suffix):
-    disp_path = FE_BASE / f"{material}{suffix}" / "gripDisp.csv"
-    force_path = FE_BASE / f"{material}{suffix}" / "gripForce.csv"
-    if not (disp_path.exists() and force_path.exists()):
+def load_fe(mat, sfx):
+    dp = FE_BASE / f"{mat}{sfx}" / "gripDisp.csv"
+    fp = FE_BASE / f"{mat}{sfx}" / "gripForce.csv"
+    if not (dp.exists() and fp.exists()):
         return None
-    disp_data = np.loadtxt(disp_path)
-    force_data = np.loadtxt(force_path)
-    t, idx = np.unique(disp_data[:, 0], return_index=True)
-    disp = X_SYMMETRY_FACTOR * disp_data[idx, 1]
-    force = CROSS_SECTION_SYMMETRY_FACTOR * force_data[idx, 1]
+    ddata = np.loadtxt(dp)
+    fdata = np.loadtxt(fp)
+    t, idx = np.unique(ddata[:, 0], return_index=True)
+    disp = X_SYMMETRY_FACTOR * ddata[idx, 1]
+    force = CROSS_SECTION_SYMMETRY_FACTOR * fdata[idx, 1]
     return t, disp, force
 
 
-PAPER_FIGS = Path(__file__).resolve().parents[2] / "paper" / "figures"
-
-
-def load_replicates(material):
+def load_replicates(mat):
     reps = []
     for r in (1, 2, 3):
-        path = EXP_BASE / f"{material}-{r}_cleaned.csv"
-        if path.exists():
-            df = pd.read_csv(path)
-            reps.append((df["time_s"].to_numpy(), df["position_mm"].to_numpy(), -df["force_N"].to_numpy()))
+        p = EXP_BASE / f"{mat}-{r}_cleaned.csv"
+        if p.exists():
+            df = pd.read_csv(p)
+            reps.append((df["time_s"].values, df["position_mm"].values, -df["force_N"].values))
     return reps
 
 
-def load_experiment(material):
-    path = EXP_BASE / f"{material}_cleaned.csv"
-    if not path.exists():
-        return None
-    df = pd.read_csv(path)
-    t = df["time_s"].to_numpy()
-    disp = df["position_mm"].to_numpy()
-    force = -df["force_N"].to_numpy()
-    return t, disp, force
+def generate_comparison_plots():
+    n_mat = len(MATERIALS)
+    fig, axes = plt.subplots(2, n_mat, figsize=(19 / 2.54, 9.8 / 2.54), sharey="row", sharex="col")
 
+    for i, mat in enumerate(MATERIALS):
+        dname = DISPLAY_NAMES[mat]
+        reps = load_replicates(mat)
+        t_max = min(t.max() for t, _, _ in reps)
+        xg = np.linspace(0, t_max, 1000)
+        f_interp = [np.interp(xg, t, f) for t, _, f in reps]
+        f_min = np.min(f_interp, axis=0)
+        f_max = np.max(f_interp, axis=0)
+        f_mean = np.mean(f_interp, axis=0)
+        f_bar_peak = np.max(f_mean)
 
-def save(fig, name):
-    for ext in ("pdf", "png"):
-        out_path = OUT_BASE / f"{name}.{ext}"
-        fig.savefig(out_path, dpi=300, bbox_inches="tight")
-        if PAPER_FIGS.exists():
-            fig.savefig(PAPER_FIGS / f"{name}.{ext}", dpi=300, bbox_inches="tight")
-        print(f"saved {out_path}")
+        # Row 0: Normalized by f_bar_peak (Mean Experimental Peak Load)
+        ax0 = axes[0, i]
+        ax0.fill_between(xg, f_min / f_bar_peak, f_max / f_bar_peak, color="0.78", alpha=0.55, zorder=1)
+        ax0.plot(xg, f_mean / f_bar_peak, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
+        ax0.set_ylim(-0.02, 1.65)
+        ax0.set_title(
+            f"{dname}\n" + r"($\bar{F}_{\mathrm{peak}} = " + f"{f_bar_peak:.1f}" + r"\,\mathrm{N}$)",
+            fontsize=7.5,
+        )
+        ax0.grid(True, alpha=0.4)
+        ax0.tick_params(labelbottom=False)
 
+        # Loading ramp inset on Row 0
+        t_ramp = RAMP_TIMES.get(mat, 10.0)
+        ins_pos = [0.46, 0.08, 0.49, 0.35] if mat == "A0V100" else [0.46, 0.62, 0.49, 0.34]
+        ax_ins = ax0.inset_axes(ins_pos)
+        v_reps = [
+            (d[t <= t_ramp + 0.05], f[t <= t_ramp + 0.05])
+            for t, d, f in reps
+            if len(d[t <= t_ramp + 0.05]) > 1
+        ]
+        d_max = min(d.max() for d, _ in v_reps)
+        dg = np.linspace(0, d_max, 200)
+        f_ramp_int = [np.interp(dg, d, f) for d, f in v_reps]
+        ax_ins.fill_between(
+            dg,
+            np.min(f_ramp_int, axis=0) / f_bar_peak,
+            np.max(f_ramp_int, axis=0) / f_bar_peak,
+            color="0.78",
+            alpha=0.55,
+        )
+        ax_ins.plot(dg, np.mean(f_ramp_int, axis=0) / f_bar_peak, color="0.25", linewidth=1.0)
+        ax_ins.set_facecolor("white")
+        ax_ins.tick_params(labelsize=4.0, pad=1, length=1.5, width=0.5)
+        ax_ins.grid(True, alpha=0.25, linewidth=0.4)
+        for spine in ax_ins.spines.values():
+            spine.set_linewidth(0.5)
+            spine.set_color("#555555")
+        ax_ins.set_xlabel(r"$u$ (mm)", fontsize=4.5, labelpad=0.5)
+        ax_ins.set_ylabel(r"$F / \bar{F}_{\mathrm{peak}}$", fontsize=4.5, labelpad=0.5)
+        ax_ins.set_ylim(-0.02, 1.48)
+        ax_ins.set_yticks([0, 0.5, 1.0])
 
-RAMP_TIMES = {"A0V100": 2.96, "A25V75": 5.93, "A50V50": 11.87, "A75V25": 29.72, "A100V0": 11.91}
-
-
-def grid_plot(xkey, xlabel, out_name, normalize=False):
-    from matplotlib.patches import Patch
-    from matplotlib.lines import Line2D
-
-    n = len(MATERIALS)
-    center = n // 2
-    fig, axes = plt.subplots(1, n, figsize=figsize_double, sharey=normalize)
-    for i, (ax, material) in enumerate(zip(axes, MATERIALS)):
-        disp_name = DISPLAY_NAMES.get(material, material)
-        fe_results = {}
-        for suffix, model_label, ls in MODELS:
-            res = load_fe(material, suffix)
-            if res is not None:
-                fe_results[suffix] = res
-
-        # Plot shaded experimental scatter band across replicates and mean curve
-        reps = load_replicates(material)
-        max_f_exp = 0.0
-        f_norm = 1.0
-        if reps:
-            max_f_exp = max(f_r.max() for _, _, f_r in reps)
-            if xkey == "t":
-                t_max = min(t_r.max() for t_r, _, _ in reps)
-                x_grid = np.linspace(0, t_max, 1000)
-                forces_interp = [np.interp(x_grid, t_r, force_r) for t_r, _, force_r in reps]
-            else:
-                disp_max = min(disp_r.max() for _, disp_r, _ in reps)
-                x_grid = np.linspace(0, disp_max, 1000)
-                forces_interp = [np.interp(x_grid, disp_r, force_r) for _, disp_r, force_r in reps]
-            f_min = np.min(forces_interp, axis=0)
-            f_max = np.max(forces_interp, axis=0)
-            f_mean = np.mean(forces_interp, axis=0)
-            if normalize:
-                f_norm = np.max(f_mean)
-                f_min = f_min / f_norm
-                f_max = f_max / f_norm
-                f_mean = f_mean / f_norm
-            ax.fill_between(x_grid, f_min, f_max, color="0.78", alpha=0.55, zorder=1)
-            ax.plot(x_grid, f_mean, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
-        else:
-            exp = load_experiment(material)
-            if exp is not None:
-                t, disp, force = exp
-                max_f_exp = force.max()
-                if normalize:
-                    f_norm = max_f_exp
-                    force = force / f_norm
-                x = t if xkey == "t" else disp
-                ax.plot(x, force, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
+        # Row 1: Normalized by each curve's own peak load (F / F_peak)
+        ax1 = axes[1, i]
+        # For experiment replicates: each replicate normalized by its own peak
+        f_indiv_interp = [np.interp(xg, t, f) / np.max(f) for t, _, f in reps]
+        ax1.fill_between(xg, np.min(f_indiv_interp, axis=0), np.max(f_indiv_interp, axis=0), color="0.78", alpha=0.55, zorder=1)
+        ax1.plot(xg, f_mean / f_bar_peak, color="0.25", linestyle="-", linewidth=1.1, zorder=2)
+        ax1.set_ylim(-0.02, 1.08)
+        ax1.grid(True, alpha=0.4)
+        if i == 2:
+            ax1.set_xlabel("Time in s", fontsize=8.5)
 
         # Plot FE models
-        max_f_fe = 0.0
-        for suffix, model_label, ls in MODELS:
-            if suffix not in fe_results:
+        for sfx, lbl, ls in MODELS:
+            res = load_fe(mat, sfx)
+            if res is None:
                 continue
-            t, disp, force = fe_results[suffix]
-            max_f_fe = max(max_f_fe, force.max())
-            if normalize:
-                force = force / f_norm
-            if xkey == "t":
-                # Finer temporal discretization for the relaxation branch to eliminate
-                # visible piecewise polygonal chords from coarse simulation increments.
-                i_peak = np.argmax(force)
-                t_ramp_fe = t[i_peak]
-                t_ramp_pts = t[: i_peak + 1]
-                f_ramp_pts = force[: i_peak + 1]
-                t_hold_pts = t[i_peak:]
-                f_hold_pts = force[i_peak:]
+            t_fe, disp_fe, force_fe = res
+            pk_fe = np.max(force_fe)
 
-                t_dense_ramp = np.linspace(0, t_ramp_fe, 200)
-                f_dense_ramp = np.interp(t_dense_ramp, t_ramp_pts, f_ramp_pts)
+            # Smooth curve using log-time PCHIP for hold phase
+            i_pk = np.argmax(force_fe)
+            t_ramp_fe = t_fe[i_pk]
+            t_dense_ramp = np.linspace(0, t_ramp_fe, 200)
+            f_dense_ramp = np.interp(t_dense_ramp, t_fe[: i_pk + 1], force_fe[: i_pk + 1])
+            u_hold = np.log(1.0 + (t_fe[i_pk:] - t_ramp_fe) / 5.0)
+            t_dense_hold = np.linspace(t_ramp_fe, t_fe[-1], 800)
+            u_dense_hold = np.log(1.0 + (t_dense_hold - t_ramp_fe) / 5.0)
+            f_dense_hold = pchip_interpolate(u_hold, force_fe[i_pk:], u_dense_hold)
+            t_smooth = np.concatenate([t_dense_ramp, t_dense_hold[1:]])
+            f_smooth = np.concatenate([f_dense_ramp, f_dense_hold[1:]])
 
-                tau0 = 5.0
-                u_hold = np.log(1.0 + (t_hold_pts - t_ramp_fe) / tau0)
-                t_dense_hold = np.linspace(t_ramp_fe, t[-1], 800)
-                u_dense_hold = np.log(1.0 + (t_dense_hold - t_ramp_fe) / tau0)
-                f_dense_hold = pchip_interpolate(u_hold, f_hold_pts, u_dense_hold)
+            # Row 0: Normalized by f_bar_peak
+            ax0.plot(t_smooth, f_smooth / f_bar_peak, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
+            mask_ins = t_fe <= t_ramp + 0.05
+            ax_ins.plot(disp_fe[mask_ins], force_fe[mask_ins] / f_bar_peak, color=colors[i], linestyle=ls, linewidth=1.0, zorder=3)
 
-                x = np.concatenate([t_dense_ramp, t_dense_hold[1:]])
-                y_plot = np.concatenate([f_dense_ramp, f_dense_hold[1:]])
-            else:
-                x = disp
-                y_plot = force
-            ax.plot(x, y_plot, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
+            # Row 1: Normalized by its OWN peak load (pk_fe)
+            ax1.plot(t_smooth, f_smooth / pk_fe, color=colors[i], linestyle=ls, linewidth=1.2, zorder=3)
 
-        max_f = max(max_f_exp, max_f_fe)
-        if xkey == "t" and max_f > 0:
-            if normalize:
-                ax.set_ylim(-0.02, 1.60)
-                if material == "A0V100":
-                    inset_pos = [0.47, 0.08, 0.49, 0.33]
-                else:
-                    inset_pos = [0.47, 0.63, 0.49, 0.32]
-            else:
-                if material in ("A0V100", "A25V75"):
-                    inset_pos = [0.50, 0.06, 0.46, 0.30]
-                    ax.set_ylim(-0.02 * max_f, 1.25 * max_f)
-                else:
-                    inset_pos = [0.48, 0.55, 0.48, 0.40]
-                    ax.set_ylim(-0.02 * max_f, 1.42 * max_f)
-
-            # Inset for loading ramp force-displacement response
-            t_ramp = RAMP_TIMES.get(material, 10.0)
-            ax_ins = ax.inset_axes(inset_pos)
-
-            if reps:
-                valid_reps = [
-                    (d_r[t_r <= t_ramp + 0.05], f_r[t_r <= t_ramp + 0.05])
-                    for t_r, d_r, f_r in reps
-                    if len(d_r[t_r <= t_ramp + 0.05]) > 1
-                ]
-                if valid_reps:
-                    d_max = min(d_sub.max() for d_sub, _ in valid_reps)
-                    d_grid = np.linspace(0, d_max, 200)
-                    f_ramp_interp = [np.interp(d_grid, d_sub, f_sub) for d_sub, f_sub in valid_reps]
-                    f_ramp_min = np.min(f_ramp_interp, axis=0)
-                    f_ramp_max = np.max(f_ramp_interp, axis=0)
-                    f_ramp_mean = np.mean(f_ramp_interp, axis=0)
-                    if normalize:
-                        f_ramp_min = f_ramp_min / f_norm
-                        f_ramp_max = f_ramp_max / f_norm
-                        f_ramp_mean = f_ramp_mean / f_norm
-                    ax_ins.fill_between(
-                        d_grid,
-                        f_ramp_min,
-                        f_ramp_max,
-                        color="0.78",
-                        alpha=0.55,
-                        zorder=1,
-                    )
-                    ax_ins.plot(
-                        d_grid,
-                        f_ramp_mean,
-                        color="0.25",
-                        linestyle="-",
-                        linewidth=1.0,
-                        zorder=2,
-                    )
-
-            for suffix, model_label, ls in MODELS:
-                if suffix not in fe_results:
-                    continue
-                t_fe, disp_fe, force_fe = fe_results[suffix]
-                mask_fe = t_fe <= t_ramp + 0.05
-                f_ins = force_fe[mask_fe]
-                if normalize:
-                    f_ins = f_ins / f_norm
-                ax_ins.plot(
-                    disp_fe[mask_fe],
-                    f_ins,
-                    color=colors[i],
-                    linestyle=ls,
-                    linewidth=1.0,
-                    zorder=3,
-                )
-
-            ax_ins.set_facecolor("white")
-            ax_ins.tick_params(labelsize=4.5, pad=1, length=1.5, width=0.5)
-            ax_ins.grid(True, alpha=0.25, linewidth=0.4)
-            for spine in ax_ins.spines.values():
-                spine.set_linewidth(0.5)
-                spine.set_color("#555555")
-            ax_ins.set_xlabel(r"$u$ (mm)", fontsize=5.0, labelpad=0.5)
-            if normalize:
-                ax_ins.set_ylabel(r"$F / \bar{F}_{\mathrm{peak}}$", fontsize=5.0, labelpad=0.5)
-                ax_ins.set_ylim(-0.02, 1.48)
-                ax_ins.set_yticks([0, 0.5, 1.0])
-            else:
-                ax_ins.set_ylabel(r"$F$ (N)", fontsize=5.0, labelpad=0.5)
-
-        if normalize:
-            ax.set_title(f"{disp_name}\n" + r"($\bar{F}_{\mathrm{peak}} = " + f"{f_norm:.1f}" + r"\,\mathrm{N}$)", fontsize=7.5)
-        else:
-            ax.set_title(disp_name, fontsize=8.5)
-        ax.grid(True, alpha=0.4)
-        if i == 0:
-            if normalize:
-                ax.set_ylabel(r"Normalized axial force $F / \bar{F}_{\mathrm{peak}}$", fontsize=8.0)
-            else:
-                ax.set_ylabel("Axial force in N", fontsize=8.5)
-        if i == center:
-            ax.set_xlabel(xlabel, fontsize=8.5)
+    axes[0, 0].set_ylabel(r"(a) $F / \bar{F}_{\mathrm{peak}}$", fontsize=8.0)
+    axes[1, 0].set_ylabel(r"(b) $F / F_{\mathrm{peak}}$", fontsize=8.0)
 
     legend_handles = [
         Patch(facecolor="0.78", edgecolor="none", alpha=0.55, label="Experiment (scatter)"),
@@ -284,14 +165,22 @@ def grid_plot(xkey, xlabel, out_name, normalize=False):
         Line2D([], [], color="black", linestyle="--", label="BB"),
         Line2D([], [], color="black", linestyle="-.", label="FS"),
     ]
-    fig.legend(handles=legend_handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.10 if normalize else 1.08),
-               frameon=False, fontsize=7.5)
+    fig.legend(
+        handles=legend_handles,
+        loc="upper center",
+        ncol=5,
+        bbox_to_anchor=(0.5, 0.99),
+        frameon=False,
+        fontsize=7.5,
+    )
     sns.despine(fig=fig)
-    fig.tight_layout()
-    save(fig, out_name)
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+
+    for out_dir in [ANALYSIS_DIR, PAPER_FIGS]:
+        for ext in ["pdf", "png"]:
+            fig.savefig(out_dir / f"lattice_experiment_comparison_force_time.{ext}", dpi=300, bbox_inches="tight")
+    print("Saved lattice_experiment_comparison_force_time.[pdf,png] successfully!")
 
 
 if __name__ == "__main__":
-    grid_plot("t", "Time in s", "lattice_experiment_comparison_force_time", normalize=True)
-    grid_plot("disp", "Grip displacement in mm", "lattice_experiment_comparison_force_disp", normalize=False)
-
+    generate_comparison_plots()
